@@ -1,7 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
+@import "tailwindcss";
 /* global resets + Tailwind utility usage inside selectors only */
 html, body {
   @apply bg-gray-100 text-gray-900;
