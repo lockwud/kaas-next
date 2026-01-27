@@ -5,17 +5,18 @@ import React from "react";
 export default function Home() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
-      <div className="flex flex-col items-center w-full max-w-xl px-6 bg-white rounded-2xl shadow-lg">        
+      <div className="flex flex-col items-center w-full max-w-xl p-6 bg-white rounded-2xl shadow-lg">        
         <div className="flex items-center justify-center bg-white">
-          <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl px-6 py-8 text-center">
+          <div className="text-center">
             {/* Logo */}
             <div className="flex justify-center mb-5">
-              <div className="w-25 h-25 rounded-full bg-gray-100 object-cover flex items-center justify-center">
+              <div className="overflow-hidden">
                 <Image
                   src="/KAASLOGO.jpeg"
                   alt="Kaas Logo"
                   width={100}
                   height={100}
+                  className="w-30 h-30 object-cover rounded-full "
                   priority
                 />
               </div>
