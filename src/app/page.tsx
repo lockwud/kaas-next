@@ -1,49 +1,74 @@
-import { CheckCircle, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Image from "next/image";
 import React from "react";
 
 export default function Home() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
-      <div className="flex flex-col items-center w-full max-w-md px-6 py-12 bg-white rounded-2xl shadow-lg">
-        <div className="mb-8 flex flex-col items-center">
-          <div className="w-20 h-20 flex items-center justify-center rounded-2xl bg-yellow-300/20 mb-6">
-            {/* Custom logo shape using Lucide icons or SVG */}
-            <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="24" cy="24" r="24" fill="#FFD23F" />
-              <path d="M36 24C36 31.732 28.8366 38 20 38C19.3347 38 18.6772 37.9702 18.0292 37.9116C25.1634 37.9116 31 31.732 31 24C31 16.268 25.1634 10.0884 18.0292 10.0884C18.6772 10.0298 19.3347 10 20 10C28.8366 10 36 16.268 36 24Z" fill="#0A1931" />
-            </svg>
-          </div>
-          <h1 className="text-3xl font-serif font-bold text-blue-900 text-center mb-2">Easy School Management</h1>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="w-3 h-3 rounded-full bg-yellow-400" />
-            <span className="w-3 h-3 rounded-full bg-yellow-300" />
-            <span className="w-3 h-3 rounded-full bg-yellow-200" />
-            <span className="w-3 h-3 rounded-full bg-yellow-100" />
+    <div className="min-h-screen flex items-center justify-center bg-white">
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl px-6 py-8 text-center">
+        {/* Logo */}
+        <div className="flex justify-center mb-5">
+          <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center">
+            <Image
+              src="/KAASLOGO.jpeg"
+              alt="Kaas Logo"
+              width={100}
+              height={100}
+              priority
+            />
           </div>
         </div>
-        <form className="w-full flex flex-col items-center">
-          <label className="flex items-center mb-8 cursor-pointer select-none">
-            <input type="checkbox" className="form-checkbox accent-yellow-400 w-5 h-5 mr-2" defaultChecked />
-            <span className="text-blue-900 text-base font-medium">Accept Terms & Conditions</span>
-          </label>
-          <div className="flex w-full gap-4 justify-center">
-            <button
-              type="button"
-              className="flex-1 border-2 border-blue-900 text-blue-900 rounded-full py-2 px-4 font-semibold transition hover:bg-blue-900 hover:text-white"
-            >
-              Already Have an Account
-            </button>
-            <button
-              type="submit"
-              className="flex-1 flex items-center justify-center gap-2 bg-yellow-400 text-blue-900 rounded-full py-2 px-8 font-bold transition hover:bg-blue-900 hover:text-yellow-400"
-            >
-              NEXT <ArrowRight className="w-5 h-5" />
-            </button>
-          </div>
-        </form>
+
+        {/* Title */}
+        <h1 className="text-xl font-bold text-green-700 mb-1">
+          Kaas Montessori
+        </h1>
+        <p className="text-blue-900 text-sm font-medium mb-2">
+          School Management System
+        </p>
+
+        {/* Dots */}
+        <div className="flex justify-center gap-2 mb-5">
+          <span className="w-2 h-2 rounded-full bg-green-700" />
+          <span className="w-2 h-2 rounded-full bg-yellow-500" />
+          <span className="w-2 h-2 rounded-full bg-yellow-400" />
+          <span className="w-2 h-2 rounded-full bg-yellow-300" />
+        </div>
+
+        {/* Terms */}
+        <label className="flex items-center justify-center gap-2 mb-6 cursor-pointer">
+          <input
+            type="checkbox"
+            defaultChecked
+            className="w-4 h-4 accent-green-700"
+          />
+          <span className="text-green-700 text-sm font-medium">
+            Accept Terms & Conditions
+          </span>
+        </label>
+
+        {/* Buttons */}
+        <div className="flex gap-3">
+          <button
+            type="button"
+            className="flex-2 whitespace-nowrap border-2 border-green-700 text-green-700 rounded-full py-2 text-sm font-semibold transition hover:bg-green-700 hover:text-white"
+          >
+            Already Have an Account
+          </button>
+
+          <button
+            type="submit"
+            className="flex-1 whitespace-nowrap flex items-center justify-center gap-1 bg-yellow-400 text-green-900 rounded-full py-2 text-sm font-bold transition hover:bg-yellow-500"
+          >
+            NEXT <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Footer */}
+        <p className="mt-8 text-xs text-green-700">
+          powered by <span className="font-semibold">synxdev</span>
+        </p>
       </div>
     </div>
   );
 }
-// Removed stray JSX code that was outside the Home component
