@@ -1,11 +1,12 @@
 import { ArrowRight } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import React from "react";
 
 export default function Home() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
-      <div className="flex flex-col items-center w-full max-w-xl p-6 bg-white rounded-2xl shadow-lg">        
+      <div className="flex flex-col items-center w-full max-w-xl p-6 bg-white rounded-2xl shadow-lg">
         <div className="flex items-center justify-center bg-white">
           <div className="text-center">
             {/* Logo */}
@@ -52,19 +53,23 @@ export default function Home() {
 
             {/* Buttons */}
             <div className="flex gap-3">
-              <button
-                type="button"
-                className="flex-2 whitespace-nowrap border-2 border-green-700 text-green-700 rounded-full p-2 text-sm font-semibold transition hover:bg-green-700 hover:text-white"
-              >
-                Already Have an Account
-              </button>
+              <Link href="/Login" className="flex-2">
+                <button
+                  type="button"
+                  className="w-full whitespace-nowrap border-2 border-green-700 text-green-700 rounded-full p-2 text-sm font-semibold transition hover:bg-green-700 hover:text-white"
+                >
+                  Already Have an Account
+                </button>
+              </Link>
 
-              <button
-                type="submit"
-                className="flex-1 whitespace-nowrap flex items-center justify-center gap-1 bg-yellow-400 text-green-900 rounded-full p-2 text-sm font-bold transition hover:bg-yellow-500"
-              >
-                NEXT <ArrowRight className="w-4 h-4" />
-              </button>
+              <Link href="/Register" className="flex-1">
+                <button
+                  type="button"
+                  className="w-full whitespace-nowrap flex items-center justify-center gap-1 bg-yellow-400 text-green-900 rounded-full p-2 text-sm font-bold transition hover:bg-yellow-500"
+                >
+                  NEXT <ArrowRight className="w-4 h-4" />
+                </button>
+              </Link>
             </div>
 
             {/* Footer */}
@@ -73,7 +78,7 @@ export default function Home() {
             </p>
           </div>
         </div>
-      </div> 
-    </div> 
+      </div>
+    </div>
   );
 }
