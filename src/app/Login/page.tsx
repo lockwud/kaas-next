@@ -85,13 +85,7 @@ export default function Login() {
                 animate="visible"
                 className="mt-8 pt-2 text-center space-y-2"
             >
-                <motion.div variants={itemVariants}>
-                    <Link href="/Register">
-                        <Button variant="outline" fullWidth className="rounded-full py-6 text-gray-500 border-gray-200">
-                            Register your School in Our App
-                        </Button>
-                    </Link>
-                </motion.div>
+
                 <motion.p variants={itemVariants} className="text-xs text-center text-gray-400">
                     Terms and Conditions & Privacy Policy
                 </motion.p>
