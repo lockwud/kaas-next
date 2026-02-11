@@ -5,6 +5,7 @@ import AuthLayout from "../../components/AuthLayout";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { motion, Variants } from "framer-motion";
+import { Select } from "@/components/ui/Select";
 
 export default function Register() {
     const containerVariants: Variants = {
@@ -51,7 +52,7 @@ export default function Register() {
                 className="space-y-4 mt-8"
                 onSubmit={(e) => e.preventDefault()}
             >
-                <motion.div variants={itemVariants} className="space-y-6">
+                <motion.div variants={itemVariants} className="space-y-4">
                     <Input
                         id="email"
                         placeholder="Enter Email Address"
@@ -70,9 +71,16 @@ export default function Register() {
                         type="text"
                         required
                     />
+
+                    <select name="dropdown" id="dropdown" className="flex h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:border-transparent disabled:cursor-not-allowed disabled:opacity-50 duration-200 border-gray-200">
+                        <option value="select-one" >Select your role</option>
+                        <option value="Headmaster">Headmaster</option>
+                        <option value="Tutor">Tutor</option>
+                        <option value="Student">Student</option>
+                    </select>
                 </motion.div>
 
-                <motion.div variants={itemVariants} className="flex justify-end pt-6">
+                <motion.div variants={itemVariants} className="flex justify-end pt-3    ">
                     <Button type="submit" className="w-32 rounded-full">
                         Register
                     </Button>
