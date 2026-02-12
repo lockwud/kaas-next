@@ -10,14 +10,21 @@ import { Search, Plus, Trash2, Edit2 } from "lucide-react";
 import { motion, Variants } from "framer-motion";
 
 export default function SessionsPage() {
-    const sessions = [
+    type SessionRow = {
+        id: number;
+        name: string;
+        startDate: string;
+        endDate: string;
+    };
+
+    const sessions: SessionRow[] = [
         { id: 1, name: "Academic Year 2025-26", startDate: "01-04-2025", endDate: "31-03-2026" },
         { id: 2, name: "Academic Year 2024-25", startDate: "01-04-2024", endDate: "31-03-2025" },
         { id: 3, name: "Summer Session 2025", startDate: "01-06-2025", endDate: "30-06-2025" },
         { id: 4, name: "Winter Session 2025", startDate: "01-12-2025", endDate: "31-12-2025" },
     ];
 
-    const columns: any[] = [
+    const columns: { header: string; accessor: keyof SessionRow; className?: string }[] = [
         { header: "Sl No.", accessor: "id", className: "w-16" },
         { header: "Sessions", accessor: "name" },
         { header: "Start Date", accessor: "startDate" },

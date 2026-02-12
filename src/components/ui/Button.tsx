@@ -22,10 +22,6 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
         const widthStyles = fullWidth ? "w-full" : "";
 
-        // Filter out props that shouldn't be passed to motion.button if necessary, 
-        // but generally spreading props is fine if types align.
-        // We cast to any to bypass strict type checking conflicts between HTML attributes and Motion props in this specific setup if needed.
-
         return (
             <motion.button
                 ref={ref}
@@ -34,7 +30,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 transition={{ type: "spring", stiffness: 400, damping: 17 }}
-                {...props as any}
+                {...props}
             >
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {children}

@@ -5,7 +5,6 @@ import AuthLayout from "../../components/AuthLayout";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { motion, Variants } from "framer-motion";
-import { Select } from "@/components/ui/Select";
 
 export default function Register() {
     const containerVariants: Variants = {
@@ -59,12 +58,12 @@ export default function Register() {
                         type="email"
                         required
                     />
-                    <Input
+                    {/* <Input
                         id="orgName"
                         placeholder="Enter Your Organization Name"
                         type="text"
                         required
-                    />
+                    /> */}
                     <Input
                         id="schoolName"
                         placeholder="Enter Your School Name"
@@ -74,6 +73,7 @@ export default function Register() {
 
                     <select name="dropdown" id="dropdown" className="flex h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:border-transparent disabled:cursor-not-allowed disabled:opacity-50 duration-200 border-gray-200">
                         <option value="select-one" >Select your role</option>
+                        <option value="administrator" >admin</option>
                         <option value="Headmaster">Headmaster</option>
                         <option value="Tutor">Tutor</option>
                         <option value="Student">Student</option>

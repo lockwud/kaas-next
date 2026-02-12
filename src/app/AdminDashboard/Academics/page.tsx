@@ -4,13 +4,17 @@ import React from "react";
 import DashboardLayout from "../../../components/DashboardLayout";
 import { DashboardCard } from "../../../components/DashboardCard";
 import { motion, Variants } from "framer-motion";
+import { useRouter } from "next/navigation";
 
 export default function AcademicsDashboard() {
+    const router = useRouter();
     const cards = [
-        "Class", "Sections", "Subjects",
-        "Time Table", "Attendance", "Student Leaves",
-        "Study Materials", "Home Work", "Notice Board",
-        "Events", "Live Classes (Go Pro)"
+        { title: "Assessments", path: "/AdminDashboard/Academics/Assessments" },
+        { title: "Terminal Reports", path: "/AdminDashboard/Academics/Reports" },
+        { title: "Class" }, { title: "Sections" }, { title: "Subjects" },
+        { title: "Time Table" }, { title: "Attendance" }, { title: "Student Leaves" },
+        { title: "Study Materials" }, { title: "Home Work" }, { title: "Notice Board" },
+        { title: "Events" }, { title: "Live Classes (Go Pro)" }
     ];
 
     const containerVariants: Variants = {
@@ -44,12 +48,12 @@ export default function AcademicsDashboard() {
                 animate="visible"
                 className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
             >
-                {cards.map((title) => (
-                    <motion.div key={title} variants={itemVariants}>
+                {cards.map((card) => (
+                    <motion.div key={card.title} variants={itemVariants}>
                         <DashboardCard
-                            title={title}
-                            onView={() => console.log(`View ${title}`)}
-                            onAdd={() => console.log(`Add ${title}`)}
+                            title={card.title}
+                            onView={() => (card.path ? router.push(card.path) : console.log(`View ${card.title}`))}
+                            onAdd={() => (card.path ? router.push(card.path) : console.log(`Add ${card.title}`))}
                         />
                     </motion.div>
                 ))}
