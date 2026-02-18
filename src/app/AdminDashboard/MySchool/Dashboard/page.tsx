@@ -3,7 +3,7 @@
 import React from "react";
 import DashboardLayout from "../../../../components/DashboardLayout";
 import { motion } from "framer-motion";
-import { branches, students, users } from "../../../../lib/school-data";
+import { students, users } from "../../../../lib/school-data";
 
 export default function MySchoolDashboard() {
   return (
@@ -16,11 +16,7 @@ export default function MySchoolDashboard() {
       >
         <h2 className="text-2xl font-bold text-gray-800">My School Management Dashboard</h2>
 
-        <div className="grid md:grid-cols-3 gap-4">
-          <div className="p-5 bg-white rounded-xl border border-gray-100 shadow-sm">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Branches</p>
-            <p className="text-3xl font-bold text-gray-900 mt-1">{branches.length}</p>
-          </div>
+        <div className="grid md:grid-cols-2 gap-4">
           <div className="p-5 bg-white rounded-xl border border-gray-100 shadow-sm">
             <p className="text-xs text-gray-500 uppercase tracking-wide">Users</p>
             <p className="text-3xl font-bold text-gray-900 mt-1">{users.length}</p>
@@ -32,7 +28,7 @@ export default function MySchoolDashboard() {
         </div>
 
         <div className="p-8 bg-white rounded-2xl border border-gray-100 shadow-sm text-sm text-gray-600">
-          Branch-aware setup is active. Use `Add Branch`, `Assessments`, `Terminal Reports`, and `Data Center` to manage the full workflow.
+          School setup is active. Use `Classes`, `Assessments`, `Terminal Reports`, and `Data Center` to manage the full workflow.
         </div>
       </motion.div>
     </DashboardLayout>

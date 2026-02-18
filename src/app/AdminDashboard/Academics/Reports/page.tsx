@@ -6,12 +6,11 @@ import { Button } from "../../../../components/ui/Button";
 import { Select } from "../../../../components/ui/Select";
 import { Table } from "../../../../components/ui/Table";
 import { motion } from "framer-motion";
-import { branches, getBranchName, getStudentName, reports } from "../../../../lib/school-data";
+import { getStudentName, reports } from "../../../../lib/school-data";
 import { Mail, MessageCircle, FileDown } from "lucide-react";
 
 interface ReportRow {
   id: string;
-  branch: string;
   student: string;
   className: string;
   term: string;
@@ -21,13 +20,9 @@ interface ReportRow {
 }
 
 export default function ReportsPage() {
-  const [selectedBranch, setSelectedBranch] = React.useState("all");
-
   const rows: ReportRow[] = reports
-    .filter((report) => (selectedBranch === "all" ? true : report.branchId === selectedBranch))
     .map((report) => ({
       id: report.id,
-      branch: getBranchName(report.branchId),
       student: getStudentName(report.studentId),
       className: report.className,
       term: report.term.replace("_", " "),
@@ -46,13 +41,7 @@ export default function ReportsPage() {
           </p>
         </div>
 
-        <div className="bg-white p-6 rounded-xl border border-gray-100 grid md:grid-cols-5 gap-4 items-end">
-          <Select
-            label="Branch"
-            value={selectedBranch}
-            onChange={(event) => setSelectedBranch(event.target.value)}
-            options={[{ value: "all", label: "All Branches" }, ...branches.map((branch) => ({ value: branch.id, label: branch.name }))]}
-          />
+        <div className="bg-white p-6 rounded-xl border border-gray-100 grid md:grid-cols-4 gap-4 items-end">
           <Select
             label="Term"
             options={[
@@ -74,7 +63,6 @@ export default function ReportsPage() {
 
         <Table
           columns={[
-            { header: "Branch", accessor: "branch" },
             { header: "Student", accessor: "student" },
             { header: "Class", accessor: "className" },
             { header: "Term", accessor: "term" },

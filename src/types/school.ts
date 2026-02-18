@@ -45,6 +45,42 @@ export interface Student {
   guardianPhone: string;
 }
 
+export interface SchoolClass {
+  id: string;
+  schoolId: string;
+  className: string;
+  section: string;
+  classTeacherId?: string;
+  classTeacherName?: string;
+  sourceSections?: string[];
+  assignedStudentIds?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudentDirectoryRecord {
+  id: string;
+  schoolId: string;
+  fullName: string;
+  className?: string;
+  section?: string;
+  classAssignmentMode: "now" | "later";
+  admissionDate: string;
+  academicYear: string;
+  guardianName: string;
+  guardianRelationship: string;
+  guardianPrimaryContact: string;
+  guardianSecondaryContact?: string;
+  houseAddress: string;
+  emergencyContactName: string;
+  emergencyContactRelationship: string;
+  emergencyContactPhone: string;
+  previousAcademicHistory?: string;
+  healthRecords?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Assessment {
   id: string;
   branchId: string;

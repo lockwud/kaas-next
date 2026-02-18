@@ -157,6 +157,10 @@ export default function Register() {
       localStorage.setItem("kaas_token", token);
       localStorage.setItem("kaas_school_id", onboardingPayload.data.school.id);
       localStorage.setItem("kaas_branch_id", onboardingPayload.data.branch.id);
+      localStorage.setItem("kaas_user_name", form.proprietorFullName);
+      localStorage.setItem("kaas_user_email", form.email);
+      localStorage.setItem("kaas_user_role", "Proprietor");
+      localStorage.setItem("kaas_school_name", form.schoolName);
 
       setSuccessMessage("Registration and school onboarding completed.");
       router.push("/AdminDashboard");
