@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Bell,
   BookOpen,
@@ -11,50 +12,49 @@ import {
   CreditCard,
   LayoutDashboard,
   LifeBuoy,
-  Menu,
-  PlusCircle,
+  LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
   School,
   Settings,
   Table2,
   UserCircle,
   Users,
   FileText,
-  PanelRight,
-  PanelRightIcon,
-  PanelRightClose,
-  UserPlus,
-  GraduationCap,
-  DollarSign,
-  Package,
-  Warehouse,
-  MessageSquare,
-  Megaphone,
-  Wrench,
-  Home,
-  Truck,
-  BookMarked,
-  Utensils,
-  CalendarClock,
-  Shield,
-  Database,
-  Plug,
-  Receipt,
-  Wallet,
-  TrendingUp,
-  PieChart,
-  Search,
 } from "lucide-react";
-import { usePathname } from "next/navigation";
-import { branches } from "../lib/school-data";
-import { button } from "framer-motion/client";
+import { usePathname, useRouter } from "next/navigation";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
+  const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = React.useState(false);
+  const [isAuthReady, setIsAuthReady] = React.useState(false);
+  const [profileName, setProfileName] = React.useState("User");
+  const [profileRole, setProfileRole] = React.useState("General Manager");
+  const [profileSchool, setProfileSchool] = React.useState("Kaas Montessori School");
   const pathname = usePathname();
+  const profileMenuRef = React.useRef<HTMLDivElement | null>(null);
+
+  const toInitials = React.useCallback((value: string) => {
+    const parts = value
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    if (!parts.length) {
+      return "U";
+    }
+
+    if (parts.length === 1) {
+      return parts[0].slice(0, 2).toUpperCase();
+    }
+
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }, []);
 
   const isActive = (path: string) => pathname === path;
   const isAcademicsActive = pathname.startsWith("/AdminDashboard/Academics");
@@ -67,8 +67,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const isSchoolManagementActive = [
     "/AdminDashboard",
-    "/AdminDashboard/AddBranch",
     "/AdminDashboard/Academics",
+    "/AdminDashboard/Academics/Classes",
+    "/AdminDashboard/Academics/Students",
     "/AdminDashboard/Sessions",
     "/AdminDashboard/Academics/Assessments",
     "/AdminDashboard/Academics/Reports",
@@ -78,35 +79,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [expandedSections, setExpandedSections] = React.useState<Record<string, boolean>>({
     mySchool: isMySchoolActive,
     schoolManagement: isSchoolManagementActive,
-    financeAccounts: false,
-    facilityLogistics: false,
-    systemSettings: false,
   });
-
-  // Auto-expand sections when navigating to their sub-pages
-  React.useEffect(() => {
-    const updates: Record<string, boolean> = {};
-
-    // Check if current path is within Finance & Accounts
-    if (pathname.startsWith("/AdminDashboard/Finance")) {
-      updates.financeAccounts = true;
-    }
-
-    // Check if current path is within Facility & Logistics
-    if (pathname.startsWith("/AdminDashboard/Facility")) {
-      updates.facilityLogistics = true;
-    }
-
-    // Check if current path is within System Settings
-    if (pathname.startsWith("/AdminDashboard/Settings")) {
-      updates.systemSettings = true;
-    }
-
-    // Only update if there are changes
-    if (Object.keys(updates).length > 0) {
-      setExpandedSections(prev => ({ ...prev, ...updates }));
-    }
-  }, [pathname]);
 
   const toggleSection = (section: string) => {
     setExpandedSections((prev) => ({
@@ -114,6 +87,60 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       [section]: !prev[section],
     }));
   };
+
+  React.useEffect(() => {
+    const token = localStorage.getItem("kaas_token");
+    if (!token) {
+      router.replace("/Login");
+      return;
+    }
+
+    const storedName = localStorage.getItem("kaas_user_name")?.trim();
+    const storedEmail = localStorage.getItem("kaas_user_email")?.trim();
+    const storedRole = localStorage.getItem("kaas_user_role")?.trim();
+    const storedSchool = localStorage.getItem("kaas_school_name")?.trim();
+
+    const emailLocalPart = storedEmail?.split("@")[0]?.replace(/[._-]+/g, " ");
+    const fallbackFromEmail = emailLocalPart
+      ? emailLocalPart
+          .split(" ")
+          .filter(Boolean)
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(" ")
+      : "User";
+
+    setProfileName(storedName || fallbackFromEmail);
+    setProfileRole(storedRole || "General Manager");
+    setProfileSchool(storedSchool || "Kaas Montessori School");
+    setIsAuthReady(true);
+  }, [router]);
+
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const profileInitials = React.useMemo(() => toInitials(profileName), [profileName, toInitials]);
+
+  const logout = () => {
+    localStorage.removeItem("kaas_token");
+    localStorage.removeItem("kaas_school_id");
+    localStorage.removeItem("kaas_user_name");
+    localStorage.removeItem("kaas_user_email");
+    localStorage.removeItem("kaas_user_role");
+    localStorage.removeItem("kaas_school_name");
+    router.replace("/Login");
+  };
+
+  if (!isAuthReady) {
+    return <div className="min-h-screen bg-gray-50" />;
+  }
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -123,440 +150,109 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <div
           className={`h-20 flex items-center border-b border-slate-800/60 mb-4 transition-all duration-300 ${isSidebarOpen ? "px-6 mx-4" : "justify-center mx-2"}`}
         >
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-linear-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-900/20 shrink-0">
-              <div className="w-5 h-5 bg-[#0F172A] rounded-lg" />
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-white p-1 flex items-center justify-center shadow-lg shrink-0 overflow-hidden">
+              <Image
+                src="/KAASLOGO.jpeg"
+                alt="School logo"
+                width={32}
+                height={32}
+                className="rounded-full object-cover"
+              />
             </div>
             {isSidebarOpen && (
-              <span className="font-bold text-xl tracking-wide text-slate-100 whitespace-nowrap overflow-hidden">
-                KAAS
+              <span className="font-bold text-xl tracking-tight text-slate-100 whitespace-nowrap overflow-hidden">
+                Kaas 
               </span>
             )}
           </div>
         </div>
 
-        <div className={`mb-6 transition-all duration-300 ${isSidebarOpen ? "px-4" : "px-2"}`}>
-          <div
-            className={`bg-slate-800/40 rounded-xl border border-slate-700/50 backdrop-blur-sm flex items-center gap-3 group hover:bg-slate-800/60 transition-colors cursor-pointer ${isSidebarOpen ? "p-3" : "p-2 justify-center"}`}
-          >
-            <div className="w-9 h-9 rounded-full bg-linear-to-br from-amber-400 to-orange-500 flex items-center justify-center font-bold text-slate-900 shadow-md shrink-0">
-              CO
-            </div>
-            {isSidebarOpen && (
-              <div className="overflow-hidden">
-                <div className="text-sm font-semibold text-slate-200 truncate group-hover:text-white transition-colors">
-                  Clement Obeng
-                </div>
-                <div className="text-xs text-slate-500 truncate">Proprietor</div>
-              </div>
-            )}
-          </div>
-        </div>
-
         <nav className="flex-1 py-4 space-y-1 overflow-y-auto scrollbar-hide">
-          {/* CORE OPERATIONS */}
-          {isSidebarOpen && (
-            <div className="px-4 pt-4 pb-2">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Core Operations</h3>
-            </div>
-          )}
-          <div className="px-4 space-y-1">
-            <Link href="/AdminDashboard">
-              <NavItem
-                icon={<Home size={20} />}
-                label="Dashboard"
-                isOpen={isSidebarOpen}
-                isActive={isActive("/AdminDashboard")}
-              />
-            </Link>
-            <Link href="/AdminDashboard/Calendar">
-              <NavItem
-                icon={<Calendar size={20} />}
-                label="Calendar"
-                isOpen={isSidebarOpen}
-                isActive={isActive("/AdminDashboard/Calendar")}
-              />
-            </Link>
-          </div>
-
-          {/* ACADEMICS */}
-          {isSidebarOpen && (
-            <div className="px-4 pt-4 pb-2">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Academics</h3>
-            </div>
-          )}
-          <div className="px-4 space-y-1">
-            <Link href="/AdminDashboard/Classes">
-              <NavItem
-                icon={<School size={20} />}
-                label="Classes & Rooms"
-                isOpen={isSidebarOpen}
-                isActive={isActive("/AdminDashboard/Classes")}
-              />
-            </Link>
-            <Link href="/AdminDashboard/Academics/Assessments">
-              <NavItem
-                icon={<Table2 size={20} />}
-                label="Assessments"
-                isOpen={isSidebarOpen}
-                isActive={isActive("/AdminDashboard/Academics/Assessments")}
-              />
-            </Link>
-            <Link href="/AdminDashboard/Enrollment">
-              <NavItem
-                icon={<UserPlus size={20} />}
-                label="Enrollment"
-                isOpen={isSidebarOpen}
-                isActive={isActive("/AdminDashboard/Enrollment")}
-              />
-            </Link>
-          </div>
-
-          {/* STUDENTS */}
-          {isSidebarOpen && (
-            <div className="px-4 pt-4 pb-2">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Students</h3>
-            </div>
-          )}
-          <div className="px-4 space-y-1">
-            <Link href="/AdminDashboard/Students/Directory">
-              <NavItem
-                icon={<GraduationCap size={20} />}
-                label="Directory"
-                isOpen={isSidebarOpen}
-                isActive={isActive("/AdminDashboard/Students/Directory")}
-              />
-            </Link>
-            <Link href="/AdminDashboard/Students/Guardians">
-              <NavItem
-                icon={<Users size={20} />}
-                label="Guardians"
-                isOpen={isSidebarOpen}
-                isActive={isActive("/AdminDashboard/Students/Guardians")}
-              />
-            </Link>
-            <Link href="/AdminDashboard/Students/Admissions">
-              <NavItem
-                icon={<UserPlus size={20} />}
-                label="Admissions"
-                isOpen={isSidebarOpen}
-                isActive={isActive("/AdminDashboard/Students/Admissions")}
-              />
-            </Link>
-          </div>
-
-          {/* HUMAN RESOURCES */}
-          {isSidebarOpen && (
-            <div className="px-4 pt-4 pb-2">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Human Resources</h3>
-            </div>
-          )}
-          <div className="px-4 space-y-1">
-            <Link href="/AdminDashboard/HR/StaffDirectory">
-              <NavItem
-                icon={<Users size={20} />}
-                label="Staff Directory"
-                isOpen={isSidebarOpen}
-                isActive={isActive("/AdminDashboard/HR/StaffDirectory")}
-              />
-            </Link>
-            <Link href="/AdminDashboard/HR/Payroll">
-              <NavItem
-                icon={<DollarSign size={20} />}
-                label="Payroll"
-                isOpen={isSidebarOpen}
-                isActive={isActive("/AdminDashboard/HR/Payroll")}
-              />
-            </Link>
-          </div>
-
-          {/* FINANCE & ACCOUNTS */}
-          {isSidebarOpen && (
-            <div className="px-4 pt-4 pb-2">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Finance & Accounts</h3>
-            </div>
-          )}
-          <div className="px-4 space-y-1">
+          <div className="px-4 py-2">
             <NavItem
-              icon={<CreditCard size={20} />}
-              label="Finance & Accounts"
+              icon={<School size={20} />}
+              label="System"
               isOpen={isSidebarOpen}
+              isActiveParent={isMySchoolActive || isActive("/AdminDashboard/MySchool")}
               hasChildren
-              isExpanded={expandedSections.financeAccounts}
-              onClick={() => toggleSection("financeAccounts")}
+              isExpanded={expandedSections.mySchool}
+              onClick={() => toggleSection("mySchool")}
             />
-            {isSidebarOpen && expandedSections.financeAccounts && (
+            {isSidebarOpen && expandedSections.mySchool && (
               <div className="ml-4 pl-4 border-l border-gray-700 mt-2 space-y-1">
-                <Link href="/AdminDashboard/Finance/FeeManagement">
+                <Link href="/AdminDashboard/MySchool/Dashboard">
                   <NavItem
-                    icon={<Receipt size={18} />}
-                    label="Fee Management"
+                    icon={<LayoutDashboard size={18} />}
+                    label="Management Dashboard"
                     isOpen
                     isSubItem
-                    isActive={isActive("/AdminDashboard/Finance/FeeManagement")}
+                    isActive={isActive("/AdminDashboard/MySchool/Dashboard")}
                   />
                 </Link>
-                <Link href="/AdminDashboard/Finance/Invoices">
-                  <NavItem
-                    icon={<FileText size={18} />}
-                    label="Invoices"
-                    isOpen
-                    isSubItem
-                    isActive={isActive("/AdminDashboard/Finance/Invoices")}
-                  />
-                </Link>
-                <Link href="/AdminDashboard/Finance/Payments">
-                  <NavItem
-                    icon={<Wallet size={18} />}
-                    label="Payments"
-                    isOpen
-                    isSubItem
-                    isActive={isActive("/AdminDashboard/Finance/Payments")}
-                  />
-                </Link>
-                <Link href="/AdminDashboard/Finance/Expenses">
-                  <NavItem
-                    icon={<TrendingUp size={18} />}
-                    label="Expenses"
-                    isOpen
-                    isSubItem
-                    isActive={isActive("/AdminDashboard/Finance/Expenses")}
-                  />
-                </Link>
-                <Link href="/AdminDashboard/Finance/Reports">
-                  <NavItem
-                    icon={<PieChart size={18} />}
-                    label="Financial Reports"
-                    isOpen
-                    isSubItem
-                    isActive={isActive("/AdminDashboard/Finance/Reports")}
-                  />
-                </Link>
-                <Link href="/AdminDashboard/Finance/Budget">
-                  <NavItem
-                    icon={<DollarSign size={18} />}
-                    label="Budget Planning"
-                    isOpen
-                    isSubItem
-                    isActive={isActive("/AdminDashboard/Finance/Budget")}
-                  />
-                </Link>
-              </div>
-            )}
-          </div>
-
-          {/* RESOURCES */}
-          {isSidebarOpen && (
-            <div className="px-4 pt-4 pb-2">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Resources</h3>
-            </div>
-          )}
-          <div className="px-4 space-y-1">
-            <Link href="/AdminDashboard/Resources/BookStore">
-              <NavItem
-                icon={<BookOpen size={20} />}
-                label="Book Store"
-                isOpen={isSidebarOpen}
-                isActive={isActive("/AdminDashboard/Resources/BookStore")}
-              />
-            </Link>
-            <Link href="/AdminDashboard/Resources/Inventory">
-              <NavItem
-                icon={<Package size={20} />}
-                label="Inventory"
-                isOpen={isSidebarOpen}
-                isActive={isActive("/AdminDashboard/Resources/Inventory")}
-              />
-            </Link>
-            <Link href="/AdminDashboard/Resources/Assets">
-              <NavItem
-                icon={<Warehouse size={20} />}
-                label="Assets"
-                isOpen={isSidebarOpen}
-                isActive={isActive("/AdminDashboard/Resources/Assets")}
-              />
-            </Link>
-          </div>
-
-          {/* FACILITY & LOGISTICS */}
-          {isSidebarOpen && (
-            <div className="px-4 pt-4 pb-2">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Facility & Logistics</h3>
-            </div>
-          )}
-          <div className="px-4 space-y-1">
-            <NavItem
-              icon={<Building2 size={20} />}
-              label="Facility & Logistics"
-              isOpen={isSidebarOpen}
-              hasChildren
-              isExpanded={expandedSections.facilityLogistics}
-              onClick={() => toggleSection("facilityLogistics")}
-            />
-            {isSidebarOpen && expandedSections.facilityLogistics && (
-              <div className="ml-4 pl-4 border-l border-gray-700 mt-2 space-y-1">
-                <Link href="/AdminDashboard/Facility/Transport">
-                  <NavItem
-                    icon={<Truck size={18} />}
-                    label="Transport"
-                    isOpen
-                    isSubItem
-                    isActive={isActive("/AdminDashboard/Facility/Transport")}
-                  />
-                </Link>
-                <Link href="/AdminDashboard/Facility/Hostel">
-                  <NavItem
-                    icon={<Building2 size={18} />}
-                    label="Hostel"
-                    isOpen
-                    isSubItem
-                    isActive={isActive("/AdminDashboard/Facility/Hostel")}
-                  />
-                </Link>
-                <Link href="/AdminDashboard/Facility/Library">
-                  <NavItem
-                    icon={<BookMarked size={18} />}
-                    label="Library"
-                    isOpen
-                    isSubItem
-                    isActive={isActive("/AdminDashboard/Facility/Library")}
-                  />
-                </Link>
-                <Link href="/AdminDashboard/Facility/Canteen">
-                  <NavItem
-                    icon={<Utensils size={18} />}
-                    label="Canteen"
-                    isOpen
-                    isSubItem
-                    isActive={isActive("/AdminDashboard/Facility/Canteen")}
-                  />
-                </Link>
-                <Link href="/AdminDashboard/Facility/Maintenance">
-                  <NavItem
-                    icon={<Wrench size={18} />}
-                    label="Maintenance"
-                    isOpen
-                    isSubItem
-                    isActive={isActive("/AdminDashboard/Facility/Maintenance")}
-                  />
-                </Link>
-                <Link href="/AdminDashboard/Facility/RoomBooking">
-                  <NavItem
-                    icon={<CalendarClock size={18} />}
-                    label="Room Booking"
-                    isOpen
-                    isSubItem
-                    isActive={isActive("/AdminDashboard/Facility/RoomBooking")}
-                  />
-                </Link>
-              </div>
-            )}
-          </div>
-
-          {/* COMMUNICATION */}
-          {isSidebarOpen && (
-            <div className="px-4 pt-4 pb-2">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Communication</h3>
-            </div>
-          )}
-          <div className="px-4 space-y-1">
-            <Link href="/AdminDashboard/Communication/Announcements">
-              <NavItem
-                icon={<Megaphone size={20} />}
-                label="Announcements"
-                isOpen={isSidebarOpen}
-                isActive={isActive("/AdminDashboard/Communication/Announcements")}
-              />
-            </Link>
-            <Link href="/AdminDashboard/Communication/Messages">
-              <NavItem
-                icon={<MessageSquare size={20} />}
-                label="Messages"
-                isOpen={isSidebarOpen}
-                isActive={isActive("/AdminDashboard/Communication/Messages")}
-              />
-            </Link>
-          </div>
-
-          {/* SYSTEM SETTINGS */}
-          {isSidebarOpen && (
-            <div className="px-4 pt-4 pb-2">
-              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">System Settings</h3>
-            </div>
-          )}
-          <div className="px-4 pb-4 space-y-1">
-            <NavItem
-              icon={<Settings size={20} />}
-              label="System Settings"
-              isOpen={isSidebarOpen}
-              hasChildren
-              isExpanded={expandedSections.systemSettings}
-              onClick={() => toggleSection("systemSettings")}
-            />
-            {isSidebarOpen && expandedSections.systemSettings && (
-              <div className="ml-4 pl-4 border-l border-gray-700 mt-2 space-y-1">
-                <Link href="/AdminDashboard/Settings/SchoolProfile">
-                  <NavItem
-                    icon={<School size={18} />}
-                    label="School Profile"
-                    isOpen
-                    isSubItem
-                    isActive={isActive("/AdminDashboard/Settings/SchoolProfile")}
-                  />
-                </Link>
-                <Link href="/AdminDashboard/Settings/AcademicYear">
-                  <NavItem
-                    icon={<CalendarClock size={18} />}
-                    label="Academic Year"
-                    isOpen
-                    isSubItem
-                    isActive={isActive("/AdminDashboard/Settings/AcademicYear")}
-                  />
-                </Link>
-                <Link href="/AdminDashboard/Settings/UserRoles">
+                <Link href="/AdminDashboard/MySchool">
                   <NavItem
                     icon={<Users size={18} />}
-                    label="User Roles"
+                    label="Users Management"
                     isOpen
                     isSubItem
-                    isActive={isActive("/AdminDashboard/Settings/UserRoles")}
+                    isActive={isActive("/AdminDashboard/MySchool")}
                   />
                 </Link>
-                <Link href="/AdminDashboard/Settings/Notifications">
-                  <NavItem
-                    icon={<Bell size={18} />}
-                    label="Notifications"
-                    isOpen
-                    isSubItem
-                    isActive={isActive("/AdminDashboard/Settings/Notifications")}
-                  />
+                <Link href="#">
+                  <NavItem icon={<LifeBuoy size={18} />} label="Supports" isOpen isSubItem />
                 </Link>
-                <Link href="/AdminDashboard/Settings/Backup">
-                  <NavItem
-                    icon={<Database size={18} />}
-                    label="Backup & Restore"
-                    isOpen
-                    isSubItem
-                    isActive={isActive("/AdminDashboard/Settings/Backup")}
-                  />
+                <Link href="#">
+                  <NavItem icon={<Building2 size={18} />} label="Organization" isOpen isSubItem />
                 </Link>
-                <Link href="/AdminDashboard/Settings/Integration">
-                  <NavItem
-                    icon={<Plug size={18} />}
-                    label="Integration"
-                    isOpen
-                    isSubItem
-                    isActive={isActive("/AdminDashboard/Settings/Integration")}
-                  />
+                <Link href="#">
+                  <NavItem icon={<Settings size={18} />} label="Settings" isOpen isSubItem />
                 </Link>
-                <Link href="/AdminDashboard/Settings/Security">
-                  <NavItem
-                    icon={<Shield size={18} />}
-                    label="Security"
-                    isOpen
-                    isSubItem
-                    isActive={isActive("/AdminDashboard/Settings/Security")}
-                  />
+                <Link href="#">
+                  <NavItem icon={<CreditCard size={18} />} label="Billing" isOpen isSubItem />
+                </Link>
+                <Link href="#">
+                  <NavItem icon={<UserCircle size={18} />} label="Profiles" isOpen isSubItem />
+                </Link>
+              </div>
+            )}
+          </div>
+
+          <div className="px-4 py-2">
+            <NavItem
+              icon={<Settings size={20} />}
+              label="Workflows"
+              isOpen={isSidebarOpen}
+              isActiveParent={isSchoolManagementActive}
+              hasChildren
+              isExpanded={expandedSections.schoolManagement}
+              onClick={() => toggleSection("schoolManagement")}
+            />
+            {isSidebarOpen && expandedSections.schoolManagement && (
+              <div className="ml-4 pl-4 border-l border-gray-700 mt-2 space-y-1">
+                <Link href="/AdminDashboard">
+                  <NavItem icon={<LayoutDashboard size={18} />} label="Dashboard" isOpen isSubItem isActive={isActive("/AdminDashboard")} />
+                </Link>
+                <Link href="/AdminDashboard/Academics">
+                  <NavItem icon={<BookOpen size={18} />} label="Academics" isOpen isSubItem isActive={isAcademicsActive} />
+                </Link>
+                <Link href="/AdminDashboard/Academics/Classes">
+                  <NavItem icon={<School size={18} />} label="Classes" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Classes")} />
+                </Link>
+                <Link href="/AdminDashboard/Academics/Students">
+                  <NavItem icon={<Users size={18} />} label="Students" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Students")} />
+                </Link>
+                <Link href="/AdminDashboard/Sessions">
+                  <NavItem icon={<Calendar size={18} />} label="Sessions" isOpen isSubItem isActive={isActive("/AdminDashboard/Sessions")} />
+                </Link>
+                <Link href="/AdminDashboard/Academics/Assessments">
+                  <NavItem icon={<Table2 size={18} />} label="Assessments" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Assessments")} />
+                </Link>
+                <Link href="/AdminDashboard/Academics/Reports">
+                  <NavItem icon={<FileText size={18} />} label="Terminal Reports" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Reports")} />
+                </Link>
+                <Link href="/AdminDashboard/DataCenter">
+                  <NavItem icon={<Table2 size={18} />} label="Data Center" isOpen isSubItem isActive={isActive("/AdminDashboard/DataCenter")} />
                 </Link>
               </div>
             )}
@@ -564,34 +260,73 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </nav>
       </aside>
 
-      <div className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarOpen ? "ml-60" : "ml-20"}`}>
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-5 sticky top-0 z-10">
-          <div className="flex items-center">
-            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-gray-100 rounded-lg">
-              <PanelRightClose size={20} className={`text-gray-600 ${isSidebarOpen ? "rotate-180" : ""}`} />
+      <div className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarOpen ? "ml-64" : "ml-20"}`}>
+        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 sticky top-0 z-10">
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="p-1 text-gray-600 hover:text-gray-900 transition-colors"
+              aria-label={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+              title={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+            >
+              {isSidebarOpen ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
             </button>
-            <div className="relative ml-4 flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="text"
-                placeholder="Search..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
-              />
-            </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-2 text-xs text-gray-500 border border-gray-200 rounded-full px-3 py-1.5">
-              <span className="font-semibold text-gray-700">Branch:</span>
-              <span>{branches[0]?.name}</span>
-            </div>
+          <div className="flex items-center gap-5">
+            <div className="relative" ref={profileMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsProfileMenuOpen((prev) => !prev)}
+                className="flex items-center p-1 rounded-full hover:bg-gray-100 transition-colors"
+                aria-label="Open profile menu"
+                title="Open profile menu"
+              >
+                <div className="w-7 h-7 rounded-full bg-slate-200 text-slate-700 text-[11px] font-semibold flex items-center justify-center">
+                  {profileInitials}
+                </div>
+              </button>
 
-            <div className="flex items-center gap-2 shadow-md p-2 rounded-xl bg-gray-100 cursor-pointer">
-              <div className="w-8 h-8 bg-gray-200 rounded-full bg-[url('https://i.pravatar.cc/150?u=kaas')] bg-cover" />
-              <span className="text-sm font-medium text-gray-700 hidden md:block line-clamp-4">Ade Kola</span>
-              <ChevronDown size={18} />
+              {isProfileMenuOpen && (
+                <div className="absolute right-0 top-12 w-52 bg-white border border-slate-200 rounded-xl shadow-xl shadow-slate-900/10 overflow-hidden z-30">
+                  <div className="px-3 py-2.5 border-b border-slate-100 bg-slate-50/70">
+                    <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">User</p>
+                    <p className="text-[11px] font-semibold text-slate-800 uppercase tracking-wide mt-1 truncate">{profileSchool}</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">{profileRole}</p>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+                  >
+                    <UserCircle size={13} />
+                    Profile
+                  </button>
+                  <button
+                    type="button"
+                    className="w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+                  >
+                    <Settings size={13} />
+                    Change Password
+                  </button>
+                  <button
+                    type="button"
+                    onClick={logout}
+                    className="w-full px-3 py-2 text-left text-xs text-rose-600 hover:bg-rose-50 border-t border-slate-100 flex items-center gap-2 transition-colors"
+                  >
+                    <LogOut size={13} />
+                    Logout
+                  </button>
+                </div>
+              )}
             </div>
-            <button className="p-2 hover:bg-gray-100 shadow-md bg-gray-200 rounded-full relative">
+            <button
+              type="button"
+              className="p-2 hover:bg-gray-100 rounded-full relative"
+              aria-label="View notifications"
+              title="View notifications"
+            >
               <Bell size={20} className="text-gray-600" />
               <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
             </button>

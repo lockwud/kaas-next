@@ -1,4 +1,3 @@
-import { ArrowRight } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import React from "react";
@@ -52,22 +51,13 @@ export default function Home() {
             </label>
 
             {/* Buttons */}
-            <div className="flex gap-3">
-              <Link href="/Login" className="flex-2">
+            <div className="flex">
+              <Link href="/Login" className="w-full">
                 <button
                   type="button"
                   className="w-full whitespace-nowrap border-2 border-green-700 text-green-700 rounded-full p-2 text-sm font-semibold transition hover:bg-green-700 hover:text-white"
                 >
-                  Already Have an Account
-                </button>
-              </Link>
-
-              <Link href="/Register" className="flex-1">
-                <button
-                  type="button"
-                  className="w-full whitespace-nowrap flex items-center justify-center gap-1 bg-yellow-400 text-green-900 rounded-full p-2 text-sm font-bold transition hover:bg-yellow-500"
-                >
-                  NEXT <ArrowRight className="w-4 h-4" />
+                  Continue to Login
                 </button>
               </Link>
             </div>

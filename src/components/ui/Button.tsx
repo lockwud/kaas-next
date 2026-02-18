@@ -2,7 +2,9 @@ import React from "react";
 import { Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+type MotionButtonProps = React.ComponentPropsWithoutRef<typeof motion.button>;
+
+interface ButtonProps extends Omit<MotionButtonProps, "children"> {
     children: React.ReactNode;
     variant?: "primary" | "outline" | "ghost";
     isLoading?: boolean;
@@ -10,7 +12,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-    ({ children, className = "", variant = "primary", isLoading, fullWidth, ...props }, ref) => {
+    ({ children, className = "", variant = "primary", isLoading, fullWidth, type, ...props }, ref) => {
         const baseStyles =
             "inline-flex items-center justify-center rounded-lg font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 h-11 px-8";
 
@@ -25,6 +27,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         return (
             <motion.button
                 ref={ref}
+                type={type ?? "button"}
                 className={`${baseStyles} ${variants[variant]} ${widthStyles} ${className}`}
                 disabled={isLoading || props.disabled}
                 whileHover={{ scale: 1.05 }}
