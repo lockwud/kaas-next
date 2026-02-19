@@ -90,11 +90,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   React.useEffect(() => {
     const token = localStorage.getItem("kaas_token");
-    if (!token) {
-      router.replace("/Login");
-      return;
-    }
-
     const storedName = localStorage.getItem("kaas_user_name")?.trim();
     const storedEmail = localStorage.getItem("kaas_user_email")?.trim();
     const storedRole = localStorage.getItem("kaas_user_role")?.trim();
@@ -109,8 +104,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           .join(" ")
       : "User";
 
-    setProfileName(storedName || fallbackFromEmail);
-    setProfileRole(storedRole || "General Manager");
+    const defaultGuestName = token ? "User" : "Guest User";
+    const defaultGuestRole = token ? "General Manager" : "Guest";
+
+    setProfileName(storedName || fallbackFromEmail || defaultGuestName);
+    setProfileRole(storedRole || defaultGuestRole);
     setProfileSchool(storedSchool || "Kaas Montessori School");
     setIsAuthReady(true);
   }, [router]);

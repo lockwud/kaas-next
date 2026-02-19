@@ -8,44 +8,6 @@ import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { motion, Variants } from "framer-motion";
 
-type RegisterResponse = {
-  status: string;
-  message: string;
-  data: {
-    token: string;
-    onboardingRequired: boolean;
-    user: {
-      id: string;
-      email: string;
-      isActive: boolean;
-      createdAt: string;
-    };
-  };
-};
-
-type OnboardResponse = {
-  status: string;
-  message: string;
-  data: {
-    school: { id: string; name: string; slug: string };
-    branch: { id: string; name: string; code: string };
-  };
-};
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api/v1";
-
-const friendlyFetchError = (error: unknown): string => {
-  if (error instanceof TypeError && error.message.toLowerCase().includes("failed to fetch")) {
-    return "Unable to reach the API server. Check backend is running and CORS allows this frontend origin.";
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Something went wrong.";
-};
-
 export default function Register() {
   const router = useRouter();
   const [isLoading, setIsLoading] = React.useState(false);
@@ -97,75 +59,19 @@ export default function Register() {
     setIsLoading(true);
 
     try {
-      const registerResponse = await fetch(`${API_BASE}/auth/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: form.email,
-          password: form.password,
-        }),
-      });
-
-      const registerPayload = (await registerResponse.json()) as Partial<RegisterResponse> & { message?: string };
-      if (!registerResponse.ok || !registerPayload?.data?.token) {
-        throw new Error(registerPayload?.message ?? "Registration failed");
-      }
-
-      const token = registerPayload.data.token;
-
-      const onboardingResponse = await fetch(`${API_BASE}/onboarding/school`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          proprietorFullName: form.proprietorFullName,
-          school: {
-            name: form.schoolName,
-            email: form.email,
-            phone: form.schoolPhone,
-            address: form.schoolAddress,
-            state: form.schoolState,
-            district: form.schoolDistrict,
-            country: form.schoolCountry,
-            timezone: form.schoolTimezone,
-            registrationNumber: form.schoolRegistrationNumber,
-            taxNumber: form.schoolTaxNumber || undefined,
-          },
-          branch: {
-            code: form.branchCode,
-            name: form.branchName,
-            email: form.email,
-            phone: form.schoolPhone,
-            address: form.schoolAddress,
-            state: form.schoolState,
-            district: form.schoolDistrict,
-            country: form.schoolCountry,
-            timezone: form.schoolTimezone,
-            registrationNumber: `${form.schoolRegistrationNumber}-BR1`,
-            taxNumber: form.schoolTaxNumber || undefined,
-          },
-        }),
-      });
-
-      const onboardingPayload = (await onboardingResponse.json()) as Partial<OnboardResponse> & { message?: string };
-      if (!onboardingResponse.ok || !onboardingPayload?.data?.school?.id) {
-        throw new Error(onboardingPayload?.message ?? "School onboarding failed");
-      }
-
+      const token = `demo-${Date.now()}`;
       localStorage.setItem("kaas_token", token);
-      localStorage.setItem("kaas_school_id", onboardingPayload.data.school.id);
-      localStorage.setItem("kaas_branch_id", onboardingPayload.data.branch.id);
+      localStorage.setItem("kaas_school_id", "demo-school");
+      localStorage.setItem("kaas_branch_id", "demo-branch");
       localStorage.setItem("kaas_user_name", form.proprietorFullName);
       localStorage.setItem("kaas_user_email", form.email);
       localStorage.setItem("kaas_user_role", "Proprietor");
       localStorage.setItem("kaas_school_name", form.schoolName);
 
-      setSuccessMessage("Registration and school onboarding completed.");
+      setSuccessMessage("Demo account created. API integration is currently disabled.");
       router.push("/AdminDashboard");
-    } catch (error) {
-      setErrorMessage(friendlyFetchError(error));
+    } catch {
+      setErrorMessage("Something went wrong.");
     } finally {
       setIsLoading(false);
     }
