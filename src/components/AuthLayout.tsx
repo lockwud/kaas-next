@@ -20,7 +20,7 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
             priority
           />
         </div>
-        <div className="absolute inset-0 bg-gradient-to-b from-white/72 via-white/68 to-slate-50/78" />
+        <div className="absolute inset-0 bg-linear-gradient-to-b from-white/72 via-white/68 to-slate-50/78" />
       </div>
 
       <div className="pointer-events-none absolute -top-24 -left-16 h-72 w-72 rounded-full bg-emerald-100/45 blur-3xl" />
