@@ -11,6 +11,7 @@ import { AlertTriangle, FileX2, MoreVertical, Pencil, Trash2, UserRoundPlus, X }
 import { Button } from "../../../../components/ui/Button";
 import { Input } from "../../../../components/ui/Input";
 import { Select } from "../../../../components/ui/Select";
+import { useToast } from "@/hooks/useToast";
 
 type ClassRow = {
   id: string;
@@ -28,6 +29,7 @@ const normalize = (value: string) => value.trim().toLowerCase();
 const unique = (values: string[]) => Array.from(new Set(values));
 
 export default function ClassesPage() {
+  const { success } = useToast();
   const [allClasses, setAllClasses] = React.useState<SchoolClass[]>([]);
   const [currentPage, setCurrentPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
@@ -194,18 +196,19 @@ export default function ClassesPage() {
     const updated = allClasses.map((item) =>
       item.id === selectedClass.id
         ? {
-            ...item,
-            className: nextClassName,
-            section: nextSection,
-            classTeacherId: chosenTeacher?.id,
-            classTeacherName: chosenTeacher?.fullName,
-            assignedStudentIds: unique(assignedStudentIds),
-            updatedAt: now,
-          }
+          ...item,
+          className: nextClassName,
+          section: nextSection,
+          classTeacherId: chosenTeacher?.id,
+          classTeacherName: chosenTeacher?.fullName,
+          assignedStudentIds: unique(assignedStudentIds),
+          updatedAt: now,
+        }
         : item,
     );
 
     persist(updated);
+    success(`Class "${nextClassName}" details updated successfully.`);
     closeDetailModal();
   };
 
@@ -330,7 +333,11 @@ export default function ClassesPage() {
 
       {selectedClass && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
+          >
             <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">Class Details</h3>
@@ -416,12 +423,12 @@ export default function ClassesPage() {
                 </Button>
               </div>
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
 
       {deleteTarget && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-rose-500">
               <AlertTriangle size={20} />
@@ -441,7 +448,8 @@ export default function ClassesPage() {
             </div>
           </div>
         </div>
-      )}
-    </DashboardLayout>
+      )
+      }
+    </DashboardLayout >
   );
 }

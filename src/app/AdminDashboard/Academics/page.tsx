@@ -12,6 +12,7 @@ import { CalendarDays, Layers, Sparkles, UserRoundPlus, UsersRound, X } from "lu
 import { createClassRecord, hasDuplicateClass, loadClasses, saveClasses } from "../../../lib/classes-storage";
 import { createStudentDirectoryRecord, loadStudentsDirectory, saveStudentsDirectory } from "../../../lib/students-storage";
 import { students, users } from "../../../lib/school-data";
+import { useToast } from "@/hooks/useToast";
 
 const normalize = (value: string) => value.trim().toLowerCase();
 const ACADEMIC_YEAR_START_MONTH = 7; // August
@@ -34,10 +35,13 @@ type CreationMode = "single" | "group";
 type StudentStep = "profile" | "guardian";
 
 export default function AcademicsDashboard() {
+  const { success } = useToast();
   const router = useRouter();
 
   const [isClassModalOpen, setIsClassModalOpen] = React.useState(false);
   const [isStudentModalOpen, setIsStudentModalOpen] = React.useState(false);
+  const [isUniversalModalOpen, setIsUniversalModalOpen] = React.useState(false);
+  const [activeModalTitle, setActiveModalTitle] = React.useState("");
 
   const [creationMode, setCreationMode] = React.useState<CreationMode>("single");
   const [className, setClassName] = React.useState("");
@@ -47,6 +51,7 @@ export default function AcademicsDashboard() {
   const [groupTargetSection, setGroupTargetSection] = React.useState("");
   const [teacherAssignmentMode, setTeacherAssignmentMode] = React.useState<"now" | "later">("later");
   const [teacherId, setTeacherId] = React.useState("");
+  const [assignedClassStudentIds, setAssignedClassStudentIds] = React.useState<string[]>([]);
 
   const [studentStep, setStudentStep] = React.useState<StudentStep>("profile");
   const [studentName, setStudentName] = React.useState("");
@@ -79,16 +84,16 @@ export default function AcademicsDashboard() {
     { title: "Terminal Reports", path: "/AdminDashboard/Academics/Reports" },
     { title: "Classes", path: "/AdminDashboard/Academics/Classes" },
     { title: "Students", path: "/AdminDashboard/Academics/Students" },
-    { title: "Sections" },
-    { title: "Subjects" },
-    { title: "Time Table" },
-    { title: "Attendance" },
-    { title: "Student Leaves" },
-    { title: "Study Materials" },
-    { title: "Home Work" },
-    { title: "Notice Board" },
-    { title: "Events" },
-    { title: "Live Classes (Go Pro)" },
+    { title: "Sections", path: "/AdminDashboard/Academics/Sections" },
+    { title: "Subjects", path: "/AdminDashboard/Academics/Subjects" },
+    { title: "Time Table", path: "/AdminDashboard/Academics/TimeTable" },
+    { title: "Attendance", path: "/AdminDashboard/Academics/Attendance" },
+    { title: "Student Leaves", path: "/AdminDashboard/Academics/Leaves" },
+    { title: "Study Materials", path: "/AdminDashboard/Academics/Materials" },
+    { title: "Home Work", path: "/AdminDashboard/Academics/Homework" },
+    { title: "Notice Board", path: "/AdminDashboard/Academics/NoticeBoard" },
+    { title: "Events", path: "/AdminDashboard/Academics/Events" },
+    { title: "Live Classes (Go Pro)", path: "/AdminDashboard/Academics/LiveClasses" },
   ];
 
   const classTeachers = React.useMemo(() => users.filter((user) => user.role === "class_teacher"), []);
@@ -161,6 +166,7 @@ export default function AcademicsDashboard() {
     setGroupTargetSection("");
     setTeacherAssignmentMode("later");
     setTeacherId("");
+    setAssignedClassStudentIds([]);
     setErrorMessage("");
   };
 
@@ -198,11 +204,41 @@ export default function AcademicsDashboard() {
     setStudentErrorMessage("");
   };
 
-  const toggleSourceSection = (value: string) => {
-    setGroupSourceSections((current) =>
-      current.includes(value) ? current.filter((item) => item !== value) : [...current, value],
+  const toggleClassStudentAssignment = (studentId: string) => {
+    setAssignedClassStudentIds((current) =>
+      current.includes(studentId) ? current.filter((id) => id !== studentId) : [...current, studentId],
     );
   };
+
+  const toggleSourceSection = (sectionName: string) => {
+    setGroupSourceSections((current) =>
+      current.includes(sectionName)
+        ? current.filter((s) => s !== sectionName)
+        : [...current, sectionName],
+    );
+  };
+
+  // Generic modal state (shared for simplicity in quick-add)
+  const [genericTitle, setGenericTitle] = React.useState("");
+  const [genericDescription, setGenericDescription] = React.useState("");
+  const [genericDate, setGenericDate] = React.useState(new Date().toISOString().slice(0, 10));
+  const [genericClass, setGenericClass] = React.useState("");
+  const [genericSubject, setGenericSubject] = React.useState("");
+  const [genericStudentName, setGenericStudentName] = React.useState("");
+  const [genericTerm, setGenericTerm] = React.useState("first_term");
+  const [genericScore, setGenericScore] = React.useState("");
+  const [genericGrade, setGenericGrade] = React.useState("");
+  const [genericCategory, setGenericCategory] = React.useState("");
+  const [genericCapacity, setGenericCapacity] = React.useState("");
+  const [genericStatus, setGenericStatus] = React.useState("Active");
+  const [genericCode, setGenericCode] = React.useState("");
+  const [genericDay, setGenericDay] = React.useState("Monday");
+  const [genericPeriod, setGenericPeriod] = React.useState("");
+  const [genericTeacher, setGenericTeacher] = React.useState("");
+  const [genericDuration, setGenericDuration] = React.useState("");
+  const [genericReason, setGenericReason] = React.useState("");
+  const [genericLocation, setGenericLocation] = React.useState("");
+  const [genericStartTime, setGenericStartTime] = React.useState("");
 
   const handleAdd = (cardTitle: string, cardPath?: string) => {
     if (cardTitle === "Classes") {
@@ -215,12 +251,29 @@ export default function AcademicsDashboard() {
       return;
     }
 
-    if (cardPath) {
-      router.push(cardPath);
-      return;
-    }
-
-    console.log(`Add ${cardTitle}`);
+    // Open universal modal for other categories
+    setActiveModalTitle(cardTitle);
+    setGenericTitle("");
+    setGenericDescription("");
+    setGenericDate(new Date().toISOString().slice(0, 10));
+    setGenericClass("");
+    setGenericSubject("");
+    setGenericStudentName("");
+    setGenericTerm("first_term");
+    setGenericScore("");
+    setGenericGrade("");
+    setGenericCategory("");
+    setGenericCapacity("");
+    setGenericStatus("Active");
+    setGenericCode("");
+    setGenericDay("Monday");
+    setGenericPeriod("");
+    setGenericTeacher("");
+    setGenericDuration("");
+    setGenericReason("");
+    setGenericLocation("");
+    setGenericStartTime("");
+    setIsUniversalModalOpen(true);
   };
 
   const createClass = (event: React.FormEvent<HTMLFormElement>) => {
@@ -276,6 +329,7 @@ export default function AcademicsDashboard() {
       createClassRecord(finalClassName, finalSection, {
         classTeacherId: teacherAssignmentMode === "now" ? assignedTeacher?.id : undefined,
         classTeacherName: teacherAssignmentMode === "now" ? assignedTeacher?.fullName : undefined,
+        assignedStudentIds: assignedClassStudentIds,
         sourceSections,
       }),
       ...existing,
@@ -283,6 +337,7 @@ export default function AcademicsDashboard() {
 
     saveClasses(next);
     refreshClassDirectory();
+    success(`Class "${finalClassName}" has been created successfully.`);
     closeClassModal();
   };
 
@@ -348,6 +403,7 @@ export default function AcademicsDashboard() {
     ];
 
     saveStudentsDirectory(next);
+    success(`Student "${trimmedName}" has been registered successfully.`);
     closeStudentModal();
   };
 
@@ -361,7 +417,7 @@ export default function AcademicsDashboard() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="h-[calc(100vh-11rem)] overflow-hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4"
+        className="h-[calc(100vh-11rem)] overflow-hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 overflow-y-auto"
       >
         {cards.map((card) => (
           <motion.div key={card.title} variants={itemVariants}>
@@ -377,7 +433,11 @@ export default function AcademicsDashboard() {
 
       {isClassModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
+          >
             <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">Create Class</h3>
@@ -398,9 +458,8 @@ export default function AcademicsDashboard() {
                 <button
                   type="button"
                   onClick={() => setCreationMode("single")}
-                  className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                    creationMode === "single" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                  }`}
+                  className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${creationMode === "single" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                    }`}
                 >
                   <Sparkles size={14} />
                   Create Directly
@@ -408,9 +467,8 @@ export default function AcademicsDashboard() {
                 <button
                   type="button"
                   onClick={() => setCreationMode("group")}
-                  className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                    creationMode === "group" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                  }`}
+                  className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${creationMode === "group" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                    }`}
                 >
                   <Layers size={14} />
                   Group Sections
@@ -449,11 +507,10 @@ export default function AcademicsDashboard() {
                               key={option}
                               type="button"
                               onClick={() => toggleSourceSection(option)}
-                              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                                active
-                                  ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                                  : "border-slate-300 bg-white text-slate-600 hover:border-slate-400"
-                              }`}
+                              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${active
+                                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                                : "border-slate-300 bg-white text-slate-600 hover:border-slate-400"
+                                }`}
                             >
                               {groupClassName}
                               {option}
@@ -470,6 +527,35 @@ export default function AcademicsDashboard() {
 
               <div className="rounded-xl border border-slate-200 p-4">
                 <div className="mb-3 flex items-center gap-2 text-slate-800">
+                  <UsersRound size={16} />
+                  <p className="text-sm font-semibold">Student Enrollment</p>
+                </div>
+                <p className="mb-3 text-xs text-slate-500">Select students to enroll in this new class.</p>
+                <div className="grid max-h-32 grid-cols-1 gap-2 overflow-auto rounded-lg border border-slate-100 p-2 sm:grid-cols-2">
+                  {students.map((student) => {
+                    const checked = assignedClassStudentIds.includes(student.id);
+                    return (
+                      <label key={student.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-xs text-slate-700 hover:bg-slate-50">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleClassStudentAssignment(student.id)}
+                          className="h-3.5 w-3.5 accent-emerald-600 rounded"
+                        />
+                        <span className="truncate">{student.fullName}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <div className="mt-2 text-right">
+                  <span className="text-[10px] font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                    {assignedClassStudentIds.length} Students Selected
+                  </span>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 p-4">
+                <div className="mb-3 flex items-center gap-2 text-slate-800">
                   <UserRoundPlus size={16} />
                   <p className="text-sm font-semibold">Class Teacher Assignment</p>
                 </div>
@@ -478,18 +564,16 @@ export default function AcademicsDashboard() {
                   <button
                     type="button"
                     onClick={() => setTeacherAssignmentMode("later")}
-                    className={`rounded-md px-3 py-2 text-xs font-medium ${
-                      teacherAssignmentMode === "later" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
-                    }`}
+                    className={`rounded-md px-3 py-2 text-xs font-medium ${teacherAssignmentMode === "later" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                      }`}
                   >
                     Assign Later
                   </button>
                   <button
                     type="button"
                     onClick={() => setTeacherAssignmentMode("now")}
-                    className={`rounded-md px-3 py-2 text-xs font-medium ${
-                      teacherAssignmentMode === "now" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
-                    }`}
+                    className={`rounded-md px-3 py-2 text-xs font-medium ${teacherAssignmentMode === "now" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                      }`}
                   >
                     Assign Now
                   </button>
@@ -519,216 +603,460 @@ export default function AcademicsDashboard() {
                 </Button>
               </div>
             </form>
-          </div>
+          </motion.div>
         </div>
       )}
 
-      {isStudentModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+      {
+        isStudentModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
+            >
+              <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-900">Register Student</h3>
+                  <p className="text-xs text-slate-500">Capture profile, guardian, emergency, and optional history/health details.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeStudentModal}
+                  aria-label="Close modal"
+                  className="rounded-full p-1 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={createStudent} className="space-y-5 px-6 py-5">
+                <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setStudentStep("profile")}
+                    className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${studentStep === "profile" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                      }`}
+                  >
+                    <UsersRound size={14} />
+                    Profile & Class
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStudentStep("guardian")}
+                    className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${studentStep === "guardian" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                      }`}
+                  >
+                    <UserRoundPlus size={14} />
+                    Guardian & Health
+                  </button>
+                </div>
+
+                {studentStep === "profile" ? (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <Input label="Student Name" value={studentName} onChange={(event) => setStudentName(event.target.value)} placeholder="Student full name" required />
+
+                    <div className="rounded-xl border border-slate-200 p-3">
+                      <p className="text-sm font-semibold text-slate-800">Academic Year</p>
+                      <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
+                        <button
+                          type="button"
+                          onClick={() => setAcademicYearMode("configured")}
+                          className={`rounded-md px-3 py-2 text-xs font-medium ${academicYearMode === "configured" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                            }`}
+                        >
+                          Use Configured
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAcademicYearMode("custom")}
+                          className={`rounded-md px-3 py-2 text-xs font-medium ${academicYearMode === "custom" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                            }`}
+                        >
+                          Provide Manually
+                        </button>
+                      </div>
+
+                      {academicYearMode === "configured" ? (
+                        <div className="mt-3">
+                          <Select
+                            label="Academic Year (Configured)"
+                            value={configuredAcademicYear}
+                            onChange={(event) => setConfiguredAcademicYear(event.target.value)}
+                            options={academicYearOptions.map((year) => ({ value: year, label: year }))}
+                          />
+                        </div>
+                      ) : (
+                        <div className="mt-3">
+                          <Input
+                            label="Academic Year (Manual)"
+                            value={customAcademicYear}
+                            onChange={(event) => setCustomAcademicYear(event.target.value)}
+                            placeholder={currentAcademicYear}
+                            required
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 p-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-slate-800">Admission Date</p>
+                        <button
+                          type="button"
+                          onClick={() => setAdmissionDate(new Date().toISOString().slice(0, 10))}
+                          className="text-xs font-medium text-emerald-700 hover:text-emerald-800"
+                        >
+                          Today
+                        </button>
+                      </div>
+                      <label className="mt-3 flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 focus-within:ring-2 focus-within:ring-emerald-600">
+                        <CalendarDays size={15} className="text-slate-400" />
+                        <input
+                          type="date"
+                          value={admissionDate}
+                          onChange={(event) => setAdmissionDate(event.target.value)}
+                          className="w-full bg-transparent text-sm text-slate-700 outline-none"
+                          required
+                        />
+                      </label>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 p-3 md:col-span-2">
+                      <p className="text-sm font-semibold text-slate-800">Class Assignment</p>
+                      <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
+                        <button
+                          type="button"
+                          onClick={() => setStudentClassAssignmentMode("later")}
+                          className={`rounded-md px-3 py-2 text-xs font-medium ${studentClassAssignmentMode === "later" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                            }`}
+                        >
+                          Assign Later
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setStudentClassAssignmentMode("now")}
+                          className={`rounded-md px-3 py-2 text-xs font-medium ${studentClassAssignmentMode === "now" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                            }`}
+                        >
+                          Assign Now
+                        </button>
+                      </div>
+
+                      {studentClassAssignmentMode === "now" && (
+                        <div className="mt-3">
+                          <Select
+                            label="Select Class"
+                            value={selectedClassId}
+                            onChange={(event) => setSelectedClassId(event.target.value)}
+                            options={classOptions}
+                            required
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <Input label="Guardian Name" value={guardianName} onChange={(event) => setGuardianName(event.target.value)} placeholder="Guardian full name" required />
+                    <Input label="Relationship" value={guardianRelationship} onChange={(event) => setGuardianRelationship(event.target.value)} placeholder="Mother, Father, Aunt..." required />
+                    <Input label="Guardian Contact" value={guardianContact} onChange={(event) => setGuardianContact(event.target.value)} placeholder="Primary phone" required />
+                    <Input label="Optional Contact" value={guardianOptionalContact} onChange={(event) => setGuardianOptionalContact(event.target.value)} placeholder="Secondary phone (optional)" />
+                    <Input label="Emergency Contact Name" value={emergencyContactName} onChange={(event) => setEmergencyContactName(event.target.value)} placeholder="Who to call if guardian unavailable" required />
+                    <Input label="Emergency Relationship" value={emergencyRelationship} onChange={(event) => setEmergencyRelationship(event.target.value)} placeholder="Uncle, Sister..." required />
+                    <Input label="Emergency Contact" value={emergencyPhone} onChange={(event) => setEmergencyPhone(event.target.value)} placeholder="Emergency phone" required />
+
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm font-medium text-gray-700">House Address</label>
+                      <textarea
+                        className="w-full min-h-20 rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                        value={houseAddress}
+                        onChange={(event) => setHouseAddress(event.target.value)}
+                        placeholder="Digital or physical home address"
+                      />
+                    </div>
+
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm font-medium text-gray-700">Previous Academic History (Optional)</label>
+                      <textarea
+                        className="w-full min-h-20 rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                        value={previousAcademicHistory}
+                        onChange={(event) => setPreviousAcademicHistory(event.target.value)}
+                        placeholder="Previous school or academic notes"
+                      />
+                    </div>
+
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm font-medium text-gray-700">Health Records (Optional)</label>
+                      <textarea
+                        className="w-full min-h-20 rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                        value={healthRecords}
+                        onChange={(event) => setHealthRecords(event.target.value)}
+                        placeholder="Allergies, conditions, special care notes"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {studentErrorMessage && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600">{studentErrorMessage}</p>}
+
+                <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                  <Button type="button" variant="outline" className="h-10 px-4" onClick={closeStudentModal}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" className="h-10 px-4">
+                    Save Student
+                  </Button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+
+      {isUniversalModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
+          >
             <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">Register Student</h3>
-                <p className="text-xs text-slate-500">Capture profile, guardian, emergency, and optional history/health details.</p>
+                <h3 className="text-lg font-semibold text-slate-900">Add {activeModalTitle}</h3>
+                <p className="text-xs text-slate-500">Quickly add a new {activeModalTitle.toLowerCase()} record.</p>
               </div>
               <button
                 type="button"
-                onClick={closeStudentModal}
-                aria-label="Close modal"
+                onClick={() => setIsUniversalModalOpen(false)}
                 className="rounded-full p-1 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={createStudent} className="space-y-5 px-6 py-5">
-              <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
-                <button
-                  type="button"
-                  onClick={() => setStudentStep("profile")}
-                  className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                    studentStep === "profile" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  <UsersRound size={14} />
-                  Profile & Class
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setStudentStep("guardian")}
-                  className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                    studentStep === "guardian" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  <UserRoundPlus size={14} />
-                  Guardian & Health
-                </button>
-              </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                console.log(`Creating ${activeModalTitle}:`, {
+                  genericTitle,
+                  genericDescription,
+                  genericDate,
+                  genericClass,
+                  genericSubject,
+                  genericStudentName,
+                  genericTerm,
+                  genericScore,
+                  genericGrade,
+                  genericCategory,
+                  genericCapacity,
+                  genericStatus,
+                  genericCode,
+                  genericDay,
+                  genericPeriod,
+                  genericTeacher,
+                  genericDuration,
+                  genericReason,
+                  genericLocation,
+                  genericStartTime,
+                });
+                success(`${activeModalTitle} record has been saved successfully.`);
+                setIsUniversalModalOpen(false);
+              }}
+              className="space-y-4 px-6 py-5 max-h-[80vh] overflow-y-auto"
+            >
+              {/* Common Fields: Student Name (for individual records) */}
+              {(activeModalTitle === "Attendance" || activeModalTitle === "Student Leaves" || activeModalTitle === "Terminal Reports") && (
+                <Input
+                  label="Student Name"
+                  value={genericStudentName}
+                  onChange={(e) => setGenericStudentName(e.target.value)}
+                  placeholder="Full name of student"
+                  required
+                />
+              )}
 
-              {studentStep === "profile" ? (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Input label="Student Name" value={studentName} onChange={(event) => setStudentName(event.target.value)} placeholder="Student full name" required />
+              {/* Title / Name Field */}
+              {activeModalTitle !== "Attendance" && activeModalTitle !== "Student Leaves" && activeModalTitle !== "Terminal Reports" && activeModalTitle !== "Time Table" && (
+                <Input
+                  label={activeModalTitle === "Sections" ? "Section Name" : activeModalTitle === "Subjects" ? "Subject Name" : "Title / Name"}
+                  value={genericTitle}
+                  onChange={(e) => setGenericTitle(e.target.value)}
+                  placeholder={`Enter ${activeModalTitle.toLowerCase()} name`}
+                  required
+                />
+              )}
 
-                  <div className="rounded-xl border border-slate-200 p-3">
-                    <p className="text-sm font-semibold text-slate-800">Academic Year</p>
-                    <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
-                      <button
-                        type="button"
-                        onClick={() => setAcademicYearMode("configured")}
-                        className={`rounded-md px-3 py-2 text-xs font-medium ${
-                          academicYearMode === "configured" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
-                        }`}
-                      >
-                        Use Configured
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAcademicYearMode("custom")}
-                        className={`rounded-md px-3 py-2 text-xs font-medium ${
-                          academicYearMode === "custom" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
-                        }`}
-                      >
-                        Provide Manually
-                      </button>
-                    </div>
+              {/* Class Selection */}
+              {activeModalTitle !== "Sections" && activeModalTitle !== "Subjects" && activeModalTitle !== "Notice Board" && activeModalTitle !== "Events" && (
+                <Select
+                  label="Class"
+                  value={genericClass}
+                  onChange={(e) => setGenericClass(e.target.value)}
+                  options={classOptions}
+                  required
+                />
+              )}
 
-                    {academicYearMode === "configured" ? (
-                      <div className="mt-3">
-                        <Select
-                          label="Academic Year (Configured)"
-                          value={configuredAcademicYear}
-                          onChange={(event) => setConfiguredAcademicYear(event.target.value)}
-                          options={academicYearOptions.map((year) => ({ value: year, label: year }))}
-                        />
-                      </div>
-                    ) : (
-                      <div className="mt-3">
-                        <Input
-                          label="Academic Year (Manual)"
-                          value={customAcademicYear}
-                          onChange={(event) => setCustomAcademicYear(event.target.value)}
-                          placeholder={currentAcademicYear}
-                          required
-                        />
-                      </div>
-                    )}
-                  </div>
+              {/* Subject Field */}
+              {(activeModalTitle === "Assessments" || activeModalTitle === "Home Work" || activeModalTitle === "Study Materials" || activeModalTitle === "Time Table") && (
+                <Input
+                  label="Subject"
+                  value={genericSubject}
+                  onChange={(e) => setGenericSubject(e.target.value)}
+                  placeholder="e.g. Mathematics"
+                  required
+                />
+              )}
 
-                  <div className="rounded-xl border border-slate-200 p-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-slate-800">Admission Date</p>
-                      <button
-                        type="button"
-                        onClick={() => setAdmissionDate(new Date().toISOString().slice(0, 10))}
-                        className="text-xs font-medium text-emerald-700 hover:text-emerald-800"
-                      >
-                        Today
-                      </button>
-                    </div>
-                    <label className="mt-3 flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 focus-within:ring-2 focus-within:ring-emerald-600">
-                      <CalendarDays size={15} className="text-slate-400" />
-                      <input
-                        type="date"
-                        value={admissionDate}
-                        onChange={(event) => setAdmissionDate(event.target.value)}
-                        className="w-full bg-transparent text-sm text-slate-700 outline-none"
-                        required
-                      />
-                    </label>
-                  </div>
-
-                  <div className="rounded-xl border border-slate-200 p-3 md:col-span-2">
-                    <p className="text-sm font-semibold text-slate-800">Class Assignment</p>
-                    <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
-                      <button
-                        type="button"
-                        onClick={() => setStudentClassAssignmentMode("later")}
-                        className={`rounded-md px-3 py-2 text-xs font-medium ${
-                          studentClassAssignmentMode === "later" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
-                        }`}
-                      >
-                        Assign Later
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setStudentClassAssignmentMode("now")}
-                        className={`rounded-md px-3 py-2 text-xs font-medium ${
-                          studentClassAssignmentMode === "now" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
-                        }`}
-                      >
-                        Assign Now
-                      </button>
-                    </div>
-
-                    {studentClassAssignmentMode === "now" && (
-                      <div className="mt-3">
-                        <Select
-                          label="Select Class"
-                          value={selectedClassId}
-                          onChange={(event) => setSelectedClassId(event.target.value)}
-                          options={classOptions}
-                          required
-                        />
-                      </div>
-                    )}
-                  </div>
+              {/* Sections / Subjects Specific */}
+              {(activeModalTitle === "Sections" || activeModalTitle === "Subjects") && (
+                <div className="grid grid-cols-2 gap-4">
+                  <Input
+                    label={activeModalTitle === "Subjects" ? "Subject Code" : "Capacity"}
+                    value={activeModalTitle === "Subjects" ? genericCode : genericCapacity}
+                    onChange={(e) => activeModalTitle === "Subjects" ? setGenericCode(e.target.value) : setGenericCapacity(e.target.value)}
+                    placeholder={activeModalTitle === "Subjects" ? "MAT-101" : "e.g. 40"}
+                    required
+                  />
+                  <Input
+                    label="Category"
+                    value={genericCategory}
+                    onChange={(e) => setGenericCategory(e.target.value)}
+                    placeholder="e.g. Core, Elective, Primary"
+                    required
+                  />
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <Input label="Guardian Name" value={guardianName} onChange={(event) => setGuardianName(event.target.value)} placeholder="Guardian full name" required />
-                  <Input label="Relationship" value={guardianRelationship} onChange={(event) => setGuardianRelationship(event.target.value)} placeholder="Mother, Father, Aunt..." required />
-                  <Input label="Guardian Contact" value={guardianContact} onChange={(event) => setGuardianContact(event.target.value)} placeholder="Primary phone" required />
-                  <Input label="Optional Contact" value={guardianOptionalContact} onChange={(event) => setGuardianOptionalContact(event.target.value)} placeholder="Secondary phone (optional)" />
-                  <Input label="Emergency Contact Name" value={emergencyContactName} onChange={(event) => setEmergencyContactName(event.target.value)} placeholder="Who to call if guardian unavailable" required />
-                  <Input label="Emergency Relationship" value={emergencyRelationship} onChange={(event) => setEmergencyRelationship(event.target.value)} placeholder="Uncle, Sister..." required />
-                  <Input label="Emergency Contact" value={emergencyPhone} onChange={(event) => setEmergencyPhone(event.target.value)} placeholder="Emergency phone" required />
+              )}
 
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-medium text-gray-700">House Address</label>
-                    <textarea
-                      className="w-full min-h-20 rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
-                      value={houseAddress}
-                      onChange={(event) => setHouseAddress(event.target.value)}
-                      placeholder="Digital or physical home address"
-                    />
-                  </div>
-
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-medium text-gray-700">Previous Academic History (Optional)</label>
-                    <textarea
-                      className="w-full min-h-20 rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
-                      value={previousAcademicHistory}
-                      onChange={(event) => setPreviousAcademicHistory(event.target.value)}
-                      placeholder="Previous school or academic notes"
-                    />
-                  </div>
-
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-medium text-gray-700">Health Records (Optional)</label>
-                    <textarea
-                      className="w-full min-h-20 rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
-                      value={healthRecords}
-                      onChange={(event) => setHealthRecords(event.target.value)}
-                      placeholder="Allergies, conditions, special care notes"
-                    />
+              {/* Reports Specific */}
+              {activeModalTitle === "Terminal Reports" && (
+                <div className="grid grid-cols-2 gap-4">
+                  <Select
+                    label="Term"
+                    value={genericTerm}
+                    onChange={(e) => setGenericTerm(e.target.value)}
+                    options={[
+                      { value: "first_term", label: "First Term" },
+                      { value: "second_term", label: "Second Term" },
+                      { value: "third_term", label: "Third Term" },
+                    ]}
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input label="Score %" value={genericScore} onChange={(e) => setGenericScore(e.target.value)} placeholder="85" required />
+                    <Input label="Grade" value={genericGrade} onChange={(e) => setGenericGrade(e.target.value)} placeholder="A" required />
                   </div>
                 </div>
               )}
 
-              {studentErrorMessage && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600">{studentErrorMessage}</p>}
+              {/* Time Table Specific */}
+              {activeModalTitle === "Time Table" && (
+                <div className="grid grid-cols-2 gap-4">
+                  <Select
+                    label="Day"
+                    value={genericDay}
+                    onChange={(e) => setGenericDay(e.target.value)}
+                    options={[
+                      { value: "Monday", label: "Monday" },
+                      { value: "Tuesday", label: "Tuesday" },
+                      { value: "Wednesday", label: "Wednesday" },
+                      { value: "Thursday", label: "Thursday" },
+                      { value: "Friday", label: "Friday" },
+                    ]}
+                  />
+                  <Input label="Period" value={genericPeriod} onChange={(e) => setGenericPeriod(e.target.value)} placeholder="e.g. 1st Period" required />
+                </div>
+              )}
+
+              {/* Attendance / Leaves / Homework / Live Classes Status */}
+              {(activeModalTitle === "Attendance" || activeModalTitle === "Student Leaves" || activeModalTitle === "Home Work" || activeModalTitle === "Live Classes (Go Pro)" || activeModalTitle === "Sections") && (
+                <Select
+                  label="Status"
+                  value={genericStatus}
+                  onChange={(e) => setGenericStatus(e.target.value)}
+                  options={
+                    activeModalTitle === "Attendance"
+                      ? [{ value: "Present", label: "Present" }, { value: "Absent", label: "Absent" }, { value: "Late", label: "Late" }]
+                      : activeModalTitle === "Student Leaves"
+                        ? [{ value: "Pending", label: "Pending" }, { value: "Approved", label: "Approved" }, { value: "Rejected", label: "Rejected" }]
+                        : activeModalTitle === "Home Work"
+                          ? [{ value: "Open", label: "Open" }, { value: "Closed", label: "Closed" }]
+                          : activeModalTitle === "Sections"
+                            ? [{ value: "Active", label: "Active" }, { value: "Inactive", label: "Inactive" }]
+                            : [{ value: "Upcoming", label: "Upcoming" }, { value: "Ongoing", label: "Ongoing" }]
+                  }
+                />
+              )}
+
+              {/* Leaves Specific */}
+              {activeModalTitle === "Student Leaves" && (
+                <div className="grid grid-cols-1 gap-4">
+                  <Input label="Duration" value={genericDuration} onChange={(e) => setGenericDuration(e.target.value)} placeholder="e.g. 3 days" required />
+                  <textarea
+                    className="w-full min-h-20 rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                    value={genericReason}
+                    onChange={(e) => setGenericReason(e.target.value)}
+                    placeholder="Reason for leave..."
+                    required
+                  />
+                </div>
+              )}
+
+              {/* Events Specific */}
+              {activeModalTitle === "Events" && (
+                <Input label="Location" value={genericLocation} onChange={(e) => setGenericLocation(e.target.value)} placeholder="e.g. School Hall" required />
+              )}
+
+              {/* Live Classes / Time Table Specific Teacher */}
+              {(activeModalTitle === "Live Classes (Go Pro)" || activeModalTitle === "Time Table") && (
+                <div className="grid grid-cols-2 gap-4">
+                  <Input label="Teacher" value={genericTeacher} onChange={(e) => setGenericTeacher(e.target.value)} placeholder="Enter teacher name" required />
+                  {activeModalTitle === "Live Classes (Go Pro)" && (
+                    <Input label="Start Time" value={genericStartTime} onChange={(e) => setGenericStartTime(e.target.value)} placeholder="e.g. 10:00 AM" required />
+                  )}
+                </div>
+              )}
+
+              {/* Date Field */}
+              {activeModalTitle !== "Sections" && activeModalTitle !== "Subjects" && activeModalTitle !== "Time Table" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">{activeModalTitle === "Home Work" ? "Deadline" : "Date"}</label>
+                  <input
+                    type="date"
+                    value={genericDate}
+                    onChange={(e) => setGenericDate(e.target.value)}
+                    className="w-full rounded-lg border border-gray-200 p-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-600"
+                    required
+                  />
+                </div>
+              )}
+
+              {/* Description / Content (for NoticeBoard, Events, Materials, Homework) */}
+              {(activeModalTitle === "Notice Board" || activeModalTitle === "Events" || activeModalTitle === "Study Materials" || activeModalTitle === "Home Work") && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Description / Content</label>
+                  <textarea
+                    className="w-full min-h-24 rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                    value={genericDescription}
+                    onChange={(e) => setGenericDescription(e.target.value)}
+                    placeholder="Enter details..."
+                    required
+                  />
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-                <Button type="button" variant="outline" className="h-10 px-4" onClick={closeStudentModal}>
+                <Button type="button" variant="outline" onClick={() => setIsUniversalModalOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" className="h-10 px-4">
-                  Save Student
+                <Button type="submit">
+                  Save {activeModalTitle}
                 </Button>
               </div>
             </form>
-          </div>
+          </motion.div>
         </div>
-      )}
-    </DashboardLayout>
+      )
+      }
+    </DashboardLayout >
   );
 }

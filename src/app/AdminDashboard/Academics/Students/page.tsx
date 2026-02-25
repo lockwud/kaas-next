@@ -6,9 +6,12 @@ import { Pagination } from "../../../../components/ui/Pagination";
 import { motion } from "framer-motion";
 import { loadStudentsDirectory } from "../../../../lib/students-storage";
 import { StudentDirectoryRecord } from "../../../../types/school";
-import { FileX2, X } from "lucide-react";
+import { FileX2, X, Award } from "lucide-react";
+import { useToast } from "@/hooks/useToast";
+import { Button } from "../../../../components/ui/Button";
 
 export default function StudentsDirectoryPage() {
+  const { success } = useToast();
   const [students, setStudents] = React.useState<StudentDirectoryRecord[]>([]);
   const [currentPage, setCurrentPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
@@ -97,7 +100,11 @@ export default function StudentsDirectoryPage() {
 
       {selectedStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
+          >
             <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">Student Details</h3>
@@ -129,7 +136,20 @@ export default function StudentsDirectoryPage() {
               <Field label="Previous Academic History" value={selectedStudent.previousAcademicHistory || "-"} className="sm:col-span-2" />
               <Field label="Health Records" value={selectedStudent.healthRecords || "-"} className="sm:col-span-2" />
             </div>
-          </div>
+
+            <div className="flex justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+              <Button variant="outline" onClick={() => setSelectedStudent(null)}>Close</Button>
+              <Button
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                onClick={() => {
+                  success(`${selectedStudent.fullName} has been promoted to the next academic level.`);
+                  setSelectedStudent(null);
+                }}
+              >
+                <Award size={16} className="mr-2" /> Promote Student
+              </Button>
+            </div>
+          </motion.div>
         </div>
       )}
     </DashboardLayout>
