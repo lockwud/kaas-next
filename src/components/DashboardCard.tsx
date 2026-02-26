@@ -27,7 +27,7 @@ export function DashboardCard({ title, onView, onAdd, compact = false }: Dashboa
     return (
         <div className={containerClass}>
             {/* Decorative top gradient line */}
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-teal-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-emerald-400 to-teal-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
 
             <div className="flex items-start justify-between">
                 <h3 className={titleClass}>{title}</h3>

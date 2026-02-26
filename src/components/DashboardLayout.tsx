@@ -19,8 +19,33 @@ import {
   Settings,
   Table2,
   UserCircle,
-  Users,
   FileText,
+  Users2,
+  Users,
+  Folder,
+  CreditCardIcon,
+  TrendingUp,
+  ChartBarDecreasing,
+  LucideWalletCards,
+  LucideWallet,
+  ClipboardCheck,
+  ChartColumnDecreasing,
+  ChartLine,
+  School2,
+  ForkKnifeCrossedIcon,
+  MapPinHouse,
+  BookOpenText,
+  ToolCase,
+  CalendarCheck,
+  CarTaxiFront,
+  IdCardIcon,
+  IdCardLanyard,
+  UserPen,
+  Video,
+  Megaphone,
+  Briefcase,
+  Layers,
+  Clock,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -62,8 +87,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const isMySchoolActive = [
     "/AdminDashboard/MySchool",
     "/AdminDashboard/MySchool/Dashboard",
-    "/AdminDashboard/MySchool/Supports",
-  ].includes(pathname);
+    "/AdminDashboard/Supports",
+    "/AdminDashboard/Organization",
+    "/AdminDashboard/Settings",
+    "/AdminDashboard/Billing",
+    "/AdminDashboard/Profiles",
+  ].includes(pathname) || pathname.startsWith("/AdminDashboard/Settings/");
 
   const isSchoolManagementActive = [
     "/AdminDashboard",
@@ -74,11 +103,54 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     "/AdminDashboard/Academics/Assessments",
     "/AdminDashboard/Academics/Reports",
     "/AdminDashboard/DataCenter",
+    "/AdminDashboard/Academics/Sections",
+    "/AdminDashboard/Academics/Subjects",
+    "/AdminDashboard/Academics/TimeTable",
+    "/AdminDashboard/Academics/Attendance",
+    "/AdminDashboard/Academics/Leaves",
+    "/AdminDashboard/Academics/Materials",
+    "/AdminDashboard/Academics/Homework",
+    "/AdminDashboard/Academics/NoticeBoard",
+    "/AdminDashboard/Academics/Events",
+    "/AdminDashboard/Academics/LiveClasses",
   ].includes(pathname);
+
+  const isStudentsActive = [
+    "/AdminDashboard/Admission",
+    "/AdminDashboard/Directory",
+    "/AdminDashboard/Guardians"
+  ].includes(pathname)
+
+  const isFinanceActive = [
+    "/AdminDashboard/Budget",
+    "/AdminDashboard/Expenses",
+    "/AdminDashboard/FeeManagement",
+    "/AdminDashboard/Invoices",
+    "/AdminDashboard/Payments",
+    "/AdminDashboard/Reports"
+  ].includes(pathname)
+
+  const isFacility = [
+    "/AdminDashboard/Canteen",
+    "/AdminDashboard/Hostel",
+    "/AdminDashboard/Library",
+    "/AdminDashboard/Maintenance",
+    "/AdminDashboard/RoomBooking",
+    "/AdminDashboard/Transport"
+  ].includes(pathname)
+
+  const isHR = [
+    "/AdminDashboard/Payroll",
+    "/AdminDashboard/StaffDirectory"
+  ].includes(pathname)
 
   const [expandedSections, setExpandedSections] = React.useState<Record<string, boolean>>({
     mySchool: isMySchoolActive,
     schoolManagement: isSchoolManagementActive,
+    students: isStudentsActive,
+    finance: isFinanceActive,
+    facility: isFacility,
+    HR: isHR
   });
 
   const toggleSection = (section: string) => {
@@ -98,10 +170,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     const emailLocalPart = storedEmail?.split("@")[0]?.replace(/[._-]+/g, " ");
     const fallbackFromEmail = emailLocalPart
       ? emailLocalPart
-          .split(" ")
-          .filter(Boolean)
-          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-          .join(" ")
+        .split(" ")
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ")
       : "User";
 
     const defaultGuestName = token ? "User" : "Guest User";
@@ -160,13 +232,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             </div>
             {isSidebarOpen && (
               <span className="font-bold text-xl tracking-tight text-slate-100 whitespace-nowrap overflow-hidden">
-                Kaas 
+                Kaas
               </span>
             )}
           </div>
         </div>
 
         <nav className="flex-1 py-4 space-y-1 overflow-y-auto scrollbar-hide">
+          {/* System */}
           <div className="px-4 py-2">
             <NavItem
               icon={<School size={20} />}
@@ -178,7 +251,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               onClick={() => toggleSection("mySchool")}
             />
             {isSidebarOpen && expandedSections.mySchool && (
-              <div className="ml-4 pl-4 border-l border-gray-700 mt-2 space-y-1">
+              <div className="ml-4 pl-4 border-l border-gray-700 mt-2 space-y-1 flex flex-col gap-2">
                 <Link href="/AdminDashboard/MySchool/Dashboard">
                   <NavItem
                     icon={<LayoutDashboard size={18} />}
@@ -190,33 +263,34 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 </Link>
                 <Link href="/AdminDashboard/MySchool">
                   <NavItem
-                    icon={<Users size={18} />}
+                    icon={<Users2 size={18} />}
                     label="Users Management"
                     isOpen
                     isSubItem
                     isActive={isActive("/AdminDashboard/MySchool")}
                   />
                 </Link>
-                <Link href="#">
-                  <NavItem icon={<LifeBuoy size={18} />} label="Supports" isOpen isSubItem />
+                <Link href="/AdminDashboard/Supports">
+                  <NavItem icon={<LifeBuoy size={18} />} label="Supports" isOpen isSubItem isActive={isActive("/AdminDashboard/Supports")} />
                 </Link>
-                <Link href="#">
-                  <NavItem icon={<Building2 size={18} />} label="Organization" isOpen isSubItem />
+                <Link href="/AdminDashboard/Organization">
+                  <NavItem icon={<Building2 size={18} />} label="Organization" isOpen isSubItem isActive={isActive("/AdminDashboard/Organization")} />
                 </Link>
-                <Link href="#">
-                  <NavItem icon={<Settings size={18} />} label="Settings" isOpen isSubItem />
+                <Link href="/AdminDashboard/Settings">
+                  <NavItem icon={<Settings size={18} />} label="Settings Hub" isOpen isSubItem isActive={isActive("/AdminDashboard/Settings")} />
                 </Link>
-                <Link href="#">
-                  <NavItem icon={<CreditCard size={18} />} label="Billing" isOpen isSubItem />
+                <Link href="/AdminDashboard/Billing">
+                  <NavItem icon={<CreditCard size={18} />} label="Billing" isOpen isSubItem isActive={isActive("/AdminDashboard/Billing")} />
                 </Link>
-                <Link href="#">
-                  <NavItem icon={<UserCircle size={18} />} label="Profiles" isOpen isSubItem />
+                <Link href="/AdminDashboard/Profiles">
+                  <NavItem icon={<UserCircle size={18} />} label="Profiles" isOpen isSubItem isActive={isActive("/AdminDashboard/Profiles")} />
                 </Link>
               </div>
             )}
           </div>
 
-          <div className="px-4 py-2">
+          {/* Workflow */}
+          <div className="px-4 py-2 gap-4">
             <NavItem
               icon={<Settings size={20} />}
               label="Workflows"
@@ -227,7 +301,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               onClick={() => toggleSection("schoolManagement")}
             />
             {isSidebarOpen && expandedSections.schoolManagement && (
-              <div className="ml-4 pl-4 border-l border-gray-700 mt-2 space-y-1">
+              <div className="ml-4 pl-4 border-l border-gray-700 mt-2 flex flex-col gap-2">
                 <Link href="/AdminDashboard">
                   <NavItem icon={<LayoutDashboard size={18} />} label="Dashboard" isOpen isSubItem isActive={isActive("/AdminDashboard")} />
                 </Link>
@@ -243,6 +317,36 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <Link href="/AdminDashboard/Sessions">
                   <NavItem icon={<Calendar size={18} />} label="Sessions" isOpen isSubItem isActive={isActive("/AdminDashboard/Sessions")} />
                 </Link>
+                <Link href="/AdminDashboard/Academics/Sections">
+                  <NavItem icon={<Layers size={18} />} label="Sections" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Sections")} />
+                </Link>
+                <Link href="/AdminDashboard/Academics/Subjects">
+                  <NavItem icon={<BookOpenText size={18} />} label="Subjects" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Subjects")} />
+                </Link>
+                <Link href="/AdminDashboard/Academics/TimeTable">
+                  <NavItem icon={<Clock size={18} />} label="Time Table" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/TimeTable")} />
+                </Link>
+                <Link href="/AdminDashboard/Academics/Attendance">
+                  <NavItem icon={<CalendarCheck size={18} />} label="Attendance" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Attendance")} />
+                </Link>
+                <Link href="/AdminDashboard/Academics/Leaves">
+                  <NavItem icon={<UserPen size={18} />} label="Student Leaves" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Leaves")} />
+                </Link>
+                <Link href="/AdminDashboard/Academics/Materials">
+                  <NavItem icon={<BookOpen size={18} />} label="Study Materials" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Materials")} />
+                </Link>
+                <Link href="/AdminDashboard/Academics/Homework">
+                  <NavItem icon={<FileText size={18} />} label="Home Work" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Homework")} />
+                </Link>
+                <Link href="/AdminDashboard/Academics/NoticeBoard">
+                  <NavItem icon={<Megaphone size={18} />} label="Notice Board" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/NoticeBoard")} />
+                </Link>
+                <Link href="/AdminDashboard/Academics/Events">
+                  <NavItem icon={<Calendar size={18} />} label="Events" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Events")} />
+                </Link>
+                <Link href="/AdminDashboard/Academics/LiveClasses">
+                  <NavItem icon={<Video size={18} />} label="Live Classes" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/LiveClasses")} />
+                </Link>
                 <Link href="/AdminDashboard/Academics/Assessments">
                   <NavItem icon={<Table2 size={18} />} label="Assessments" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Assessments")} />
                 </Link>
@@ -255,6 +359,129 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </div>
             )}
           </div>
+
+          {/* Student */}
+          {/* <div className="px-4 py-2 gap-4">
+            <NavItem
+              icon={<Users2 size={20} />}
+              label="Students"
+              isOpen={isSidebarOpen}
+              isActiveParent={isStudentsActive}
+              hasChildren
+              isExpanded={expandedSections.students}
+              onClick={() => toggleSection("students")}
+            />
+            {isSidebarOpen && expandedSections.students && (
+              <div className="ml-4 pl-4 border-l border-gray-700 mt-2 flex flex-col gap-2">
+                <Link href="/Admissions">
+                  <NavItem icon={<BookOpen size={18} />} label="Admission" isOpen isSubItem isActive={isActive("/AdminDashboard/Admissions")} />
+                </Link>
+                <Link href="/AdminDashboard/StudentDirectoryPage">
+                  <NavItem icon={<Folder size={18} />} label="Directory" isOpen isSubItem isActive={isActive("/AdminDashboard/StudentDirectoryPage")} />
+                </Link>
+                <Link href="/AdminDashboard/Guardian">
+                  <NavItem icon={<UserCircle size={18} />} label="Guardians" isOpen isSubItem isActive={isActive("/AdminDashboard/Guardian")} />
+                </Link>
+              </div>
+            )}
+          </div> */}
+
+          {/* Finance */}
+          {/* <div className="px-4 py-2 gap-4">
+            <NavItem 
+            icon={<LucideWallet size={20}/>}
+              label="Finances"
+              isOpen={isSidebarOpen}
+              isActive={isFinanceActive}
+              hasChildren
+              isExpanded={expandedSections.finance}
+              onClick={()=> toggleSection("finance")}
+            />
+            {isSidebarOpen && expandedSections.finance && (
+              <div className="ml-4 pl-4 border-l border-gray-700 mt-2 flex flex-col gap-2">
+                <Link href="/AdminDashboard/Budget">
+                  <NavItem icon={<LucideWalletCards size={18} />} label="Budget" isOpen isSubItem isActive={isActive("/AdminDashboard/Budget")} />
+                </Link>
+                <Link href="/AdminDashboard/Expenses">
+                  <NavItem icon={<ChartBarDecreasing size={18} />} label="Expenses" isOpen isSubItem isActive={isActive("/AdminDashboard/Expenses")} />
+                </Link>
+                <Link href="/AdminDashboard/FeeManagement">
+                  <NavItem icon={<CreditCardIcon size={18} />} label="Fee Management" isOpen isSubItem isActive={isActive("/AdminDashboard/FeeManagement")} />
+                </Link>
+                <Link href="/AdminDashboard/Invoices">
+                  <NavItem icon={<ClipboardCheck size={18} />} label="Invoices" isOpen isSubItem isActive={isActive("/AdminDashboard/Invoices")} />
+                </Link>
+                <Link href="/AdminDashboard/Payment">
+                  <NavItem icon={<ChartColumnDecreasing size={18} />} label="Payment" isOpen isSubItem isActive={isActive("/AdminDashboard/Payment")} />
+                </Link>
+                <Link href="/AdminDashboard/Reports">
+                  <NavItem icon={<ChartLine size={18} />} label="Reports" isOpen isSubItem isActive={isActive("/AdminDashboard/Reports")} />
+                </Link>
+              </div>
+            )}
+          </div> */}
+
+          {/* Facility */}
+          {/* <div className="px-4 py-2 gap-4">
+            <NavItem
+              icon={<School2 size={20}/>}
+              label="Facility"
+              isOpen= {isSidebarOpen}
+              isActive={isFacility}
+              hasChildren
+              isExpanded={expandedSections.facility}
+              onClick={()=> toggleSection("facility")}
+             />
+             {isSidebarOpen && expandedSections.facility && (
+              <div className="ml-4 pl-4 border-l border-gray-700 mt-2 flex flex-col gap-2">
+                <Link href="/AdminDashboard/Canteen">
+                  <NavItem icon={<ForkKnifeCrossedIcon size={18} />} label="Canteen" isOpen isSubItem isActive={isActive("/AdminDashboard/Canteen")} />
+                </Link>
+                <Link href="/AdminDashboard/Hostel">
+                  <NavItem icon={<MapPinHouse size={18} />} label="Hostel" isOpen isSubItem isActive={isActive("/AdminDashboard/Hostel")} />
+                </Link>
+                <Link href="/AdminDashboard/Library">
+                  <NavItem icon={<BookOpenText size={18} />} label="Library" isOpen isSubItem isActive={isActive("/AdminDashboard/Library")} />
+                </Link>
+                <Link href="/AdminDashboard/Maintenance">
+                  <NavItem icon={<ToolCase size={18} />} label="Maintenance" isOpen isSubItem isActive={isActive("/AdminDashboard/Maintenance")} />
+                </Link>
+                <Link href="/AdminDashboard/RoomBooking">
+                  <NavItem icon={<CalendarCheck size={18} />} label="RoomBooking" isOpen isSubItem isActive={isActive("/AdminDashboard/RoomBooking")} />
+                </Link>
+                <Link href="/AdminDashboard/Transport">
+                  <NavItem icon={<CarTaxiFront size={18} />} label="Transport" isOpen isSubItem isActive={isActive("/AdminDashboard/Transport")} />
+                </Link>
+              </div>
+             )}
+          </div> */}
+
+          {/* HR */}
+          {/* <div className="px-4 py-2 gap-4">
+            <NavItem
+              icon={<UserPen size={20}/>}
+              label="Staff (HR)"
+              isOpen= {isSidebarOpen}
+              isActive={isHR}
+              hasChildren
+              isExpanded={expandedSections.HR}
+              onClick={()=> toggleSection("HR")}
+            />
+            {isSidebarOpen && expandedSections.HR && (
+              <div className="ml-4 pl-4 border-l border-gray-700 mt-2 flex flex-col gap-2">
+                <Link href="/AdminDashboard/Payroll">
+                  <NavItem icon={<IdCardLanyard size={18} />} label="Payroll" isOpen isSubItem isActive={isActive("/AdminDashboard/Payroll")} />
+                </Link>
+                <Link href="/AdminDashboard/StaffDirectory">
+                  <NavItem icon={<IdCardIcon size={18} />} label="StaffDirectory" isOpen isSubItem isActive={isActive("/AdminDashboard/StaffDirectory")} />
+                </Link>
+              </div>
+            )}
+          </div> */}
+
+          {/* Resources */}
+          {/* Communications */}
+          {/* Settings */}
         </nav>
       </aside>
 
@@ -331,7 +558,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
         </header>
 
-        <main className="p-8">{children}</main>
+        <main className="relative overflow-y-auto h-full p-8">{children}</main>
       </div>
     </div>
   );

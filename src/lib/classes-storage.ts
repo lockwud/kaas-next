@@ -69,6 +69,7 @@ interface CreateClassOptions {
   classTeacherId?: string;
   classTeacherName?: string;
   sourceSections?: string[];
+  assignedStudentIds?: string[];
 }
 
 export const createClassRecord = (
@@ -85,6 +86,7 @@ export const createClassRecord = (
     classTeacherId: options?.classTeacherId,
     classTeacherName: options?.classTeacherName,
     sourceSections: options?.sourceSections,
+    assignedStudentIds: options?.assignedStudentIds ?? [],
     createdAt: now,
     updatedAt: now,
   };
