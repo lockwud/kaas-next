@@ -3,15 +3,20 @@
 import React from "react";
 import DashboardLayout from "../../../../components/DashboardLayout";
 import { Pagination } from "../../../../components/ui/Pagination";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { students, users } from "../../../../lib/school-data";
 import { loadClasses, saveClasses } from "../../../../lib/classes-storage";
 import { SchoolClass } from "../../../../types/school";
-import { AlertTriangle, FileX2, MoreVertical, Pencil, Trash2, UserRoundPlus, X } from "lucide-react";
+import {
+  AlertTriangle, FileX2, MoreVertical, Pencil, Trash2,
+  UserRoundPlus, X, Search, School, Users, UserCheck,
+  Layers, Plus
+} from "lucide-react";
 import { Button } from "../../../../components/ui/Button";
 import { Input } from "../../../../components/ui/Input";
 import { Select } from "../../../../components/ui/Select";
 import { useToast } from "@/hooks/useToast";
+import { BackButton } from "../../../../components/ui/BackButton";
 
 type ClassRow = {
   id: string;
@@ -25,7 +30,6 @@ type ClassRow = {
 };
 
 const normalize = (value: string) => value.trim().toLowerCase();
-
 const unique = (values: string[]) => Array.from(new Set(values));
 
 export default function ClassesPage() {
@@ -34,6 +38,7 @@ export default function ClassesPage() {
   const [currentPage, setCurrentPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
   const [openActionRowId, setOpenActionRowId] = React.useState<string | null>(null);
+  const [search, setSearch] = React.useState("");
 
   const [selectedClassId, setSelectedClassId] = React.useState<string | null>(null);
   const [editClassName, setEditClassName] = React.useState("");
@@ -56,7 +61,6 @@ export default function ClassesPage() {
         setOpenActionRowId(null);
       }
     };
-
     document.addEventListener("mousedown", onOutsideClick);
     return () => document.removeEventListener("mousedown", onOutsideClick);
   }, []);
@@ -81,36 +85,36 @@ export default function ClassesPage() {
     [getBaseStudentIds],
   );
 
-  const rows: ClassRow[] = allClasses.map((item) => ({
-    id: item.id,
-    className: item.className,
-    section: item.section,
-    classTeacher: item.classTeacherName ?? "Unassigned",
-    source:
-      item.sourceSections && item.sourceSections.length > 0
-        ? `Merged: ${item.sourceSections.map((sourceSection) => `${item.className}${sourceSection}`).join(", ")}`
-        : "Direct",
-    students: getTotalStudentIds(item).length,
-    createdAt: new Date(item.createdAt).toLocaleDateString(),
-    updatedAt: new Date(item.updatedAt).toLocaleDateString(),
-  }));
+  const rows: ClassRow[] = allClasses
+    .map((item) => ({
+      id: item.id,
+      className: item.className,
+      section: item.section,
+      classTeacher: item.classTeacherName ?? "Unassigned",
+      source:
+        item.sourceSections && item.sourceSections.length > 0
+          ? `Merged: ${item.sourceSections.map((sourceSection) => `${item.className}${sourceSection}`).join(", ")}`
+          : "Direct",
+      students: getTotalStudentIds(item).length,
+      createdAt: new Date(item.createdAt).toLocaleDateString(),
+      updatedAt: new Date(item.updatedAt).toLocaleDateString(),
+    }))
+    .filter(r =>
+      r.className.toLowerCase().includes(search.toLowerCase()) ||
+      r.section.toLowerCase().includes(search.toLowerCase()) ||
+      r.classTeacher.toLowerCase().includes(search.toLowerCase())
+    );
 
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
   const paginatedRows = rows.slice((safeCurrentPage - 1) * pageSize, safeCurrentPage * pageSize);
 
-  React.useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
-    }
-  }, [currentPage, totalPages]);
+  const totalStudentsCount = rows.reduce((acc, r) => acc + r.students, 0);
+  const assignedTeachersCount = Array.from(new Set(rows.filter(r => r.classTeacher !== "Unassigned").map(r => r.classTeacher))).length;
 
   const openDetailModal = (row: ClassRow) => {
     const target = allClasses.find((item) => item.id === row.id);
-    if (!target) {
-      return;
-    }
-
+    if (!target) return;
     setSelectedClassId(target.id);
     setEditClassName(target.className);
     setEditSection(target.section);
@@ -131,17 +135,10 @@ export default function ClassesPage() {
   };
 
   const confirmDelete = () => {
-    if (!deleteTarget) {
-      return;
-    }
-
+    if (!deleteTarget) return;
     const updated = allClasses.filter((item) => item.id !== deleteTarget.id);
     persist(updated);
-
-    if (selectedClassId === deleteTarget.id) {
-      closeDetailModal();
-    }
-
+    if (selectedClassId === deleteTarget.id) closeDetailModal();
     setDeleteTarget(null);
   };
 
@@ -151,11 +148,7 @@ export default function ClassesPage() {
   );
 
   const studentOptions = React.useMemo(
-    () =>
-      students.map((student) => ({
-        id: student.id,
-        label: `${student.fullName} (${student.className}${student.section})`,
-      })),
+    () => students.map((s) => ({ id: s.id, label: `${s.fullName} (${s.className}${s.section})` })),
     [],
   );
 
@@ -166,33 +159,25 @@ export default function ClassesPage() {
   };
 
   const updateClassFromModal = () => {
-    if (!selectedClass) {
-      return;
-    }
-
+    if (!selectedClass) return;
     const nextClassName = editClassName.trim();
     const nextSection = editSection.trim();
-
     if (!nextClassName || !nextSection) {
       setModalError("Class name and section are required.");
       return;
     }
-
     const duplicate = allClasses.some(
       (item) =>
         item.id !== selectedClass.id &&
         normalize(item.className) === normalize(nextClassName) &&
         normalize(item.section) === normalize(nextSection),
     );
-
     if (duplicate) {
       setModalError("Class and section already exist.");
       return;
     }
-
     const chosenTeacher = classTeachers.find((teacher) => teacher.id === editTeacherId);
     const now = new Date().toISOString();
-
     const updated = allClasses.map((item) =>
       item.id === selectedClass.id
         ? {
@@ -206,7 +191,6 @@ export default function ClassesPage() {
         }
         : item,
     );
-
     persist(updated);
     success(`Class "${nextClassName}" details updated successfully.`);
     closeDetailModal();
@@ -224,9 +208,50 @@ export default function ClassesPage() {
 
   return (
     <DashboardLayout>
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-        <h2 className="text-2xl font-bold text-slate-900">Classes Directory</h2>
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+        <BackButton href="/AdminDashboard/Academics" label="Back to Academics" />
 
+        {/* Header */}
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">Classes Directory</h2>
+            <p className="text-slate-500 text-sm mt-1">Manage all school classes, sections, and assigned teachers.</p>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { label: "Total Classes", value: rows.length, icon: <School size={18} />, color: "bg-blue-50 text-blue-700" },
+            { label: "Total Students", value: totalStudentsCount, icon: <Users size={18} />, color: "bg-emerald-50 text-emerald-700" },
+            { label: "Teachers Assigned", value: assignedTeachersCount, icon: <UserCheck size={18} />, color: "bg-violet-50 text-violet-700" },
+            { label: "Sections", value: Array.from(new Set(rows.map(r => r.section))).length, icon: <Layers size={18} />, color: "bg-amber-50 text-amber-700" },
+          ].map(stat => (
+            <div key={stat.label} className={`${stat.color} rounded-xl p-4 flex items-center gap-3 shadow-xs`}>
+              <span className="opacity-70 shrink-0">{stat.icon}</span>
+              <div>
+                <p className="text-2xl font-black">{stat.value}</p>
+                <p className="text-xs font-medium mt-0.5 opacity-70">{stat.label}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Search/Filters */}
+        <div className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3 shadow-sm">
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              value={search}
+              onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
+              placeholder="Search by class name, section, or teacher…"
+              className="h-10 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-medium"
+            />
+          </div>
+          <p className="text-xs font-semibold text-slate-400 whitespace-nowrap hidden sm:block">Showing {rows.length} records</p>
+        </div>
+
+        {/* Table */}
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-left">
@@ -237,8 +262,7 @@ export default function ClassesPage() {
                   <th className="px-4 py-3">Class Teacher</th>
                   <th className="px-4 py-3">Source</th>
                   <th className="px-4 py-3">Students</th>
-                  <th className="px-4 py-3">Created Date</th>
-                  <th className="px-4 py-3">Updated Date</th>
+                  <th className="px-4 py-3">Created</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -247,50 +271,33 @@ export default function ClassesPage() {
                   paginatedRows.map((row) => (
                     <tr
                       key={row.id}
-                      className="cursor-pointer border-t border-slate-100 text-sm text-slate-700 hover:bg-slate-50/70"
+                      className="cursor-pointer border-t border-slate-100 text-sm text-slate-700 hover:bg-emerald-50/50 transition-colors"
                       onClick={() => openDetailModal(row)}
                     >
-                      <td className="px-4 py-3 font-medium">{row.className}</td>
-                      <td className="px-4 py-3">{row.section}</td>
+                      <td className="px-4 py-3 font-semibold text-slate-900">{row.className}</td>
+                      <td className="px-4 py-3">
+                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-bold text-[10px]">{row.section}</span>
+                      </td>
                       <td className="px-4 py-3">{row.classTeacher}</td>
-                      <td className="px-4 py-3 text-xs text-slate-600">{row.source}</td>
-                      <td className="px-4 py-3">{row.students}</td>
-                      <td className="px-4 py-3">{row.createdAt}</td>
-                      <td className="px-4 py-3">{row.updatedAt}</td>
+                      <td className="px-4 py-3 text-xs text-slate-500 font-medium italic">{row.source}</td>
+                      <td className="px-4 py-3 font-bold text-emerald-600">{row.students}</td>
+                      <td className="px-4 py-3 text-xs text-slate-500">{row.createdAt}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="relative inline-block" data-action-root="true">
                           <button
                             type="button"
-                            aria-label="Open class actions"
-                            className="rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-500"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setOpenActionRowId((current) => (current === row.id ? null : row.id));
-                            }}
+                            className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-500"
+                            onClick={(e) => { e.stopPropagation(); setOpenActionRowId(row.id === openActionRowId ? null : row.id); }}
                           >
-                            <MoreVertical size={14} />
+                            <MoreVertical size={16} />
                           </button>
-
                           {openActionRowId === row.id && (
-                            <div
-                              className="absolute right-0 z-20 mt-1 w-28 rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              <button
-                                type="button"
-                                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-slate-400 hover:bg-slate-50 hover:text-slate-500"
-                                onClick={() => openDetailModal(row)}
-                              >
-                                <Pencil size={12} />
-                                Edit
+                            <div className="absolute right-0 z-20 mt-1 w-32 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl ring-1 ring-black/5 animate-in fade-in zoom-in duration-100">
+                              <button onClick={() => openDetailModal(row)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-slate-600 hover:bg-slate-50 font-medium">
+                                <Pencil size={12} /> Edit Class
                               </button>
-                              <button
-                                type="button"
-                                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-slate-400 hover:bg-slate-50 hover:text-slate-500"
-                                onClick={() => handleDelete(row)}
-                              >
-                                <Trash2 size={12} />
-                                Delete
+                              <button onClick={() => handleDelete(row)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-rose-600 hover:bg-rose-50 font-medium">
+                                <Trash2 size={12} /> Delete
                               </button>
                             </div>
                           )}
@@ -300,13 +307,15 @@ export default function ClassesPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={8} className="h-[340px] px-4 py-8">
-                      <div className="flex h-full flex-col items-center justify-center text-center">
-                        <div className="mb-3 rounded-2xl bg-slate-100 p-3 text-slate-400">
-                          <FileX2 size={24} />
+                    <td colSpan={7} className="h-64 px-4 py-8">
+                      <div className="flex flex-col items-center justify-center text-center gap-3">
+                        <div className="rounded-2xl bg-slate-100 p-4 text-slate-400">
+                          <FileX2 size={32} />
                         </div>
-                        <p className="text-sm font-semibold text-slate-700">No data found</p>
-                        <p className="mt-1 text-xs text-slate-400">There are no results to display at this time</p>
+                        <div>
+                          <p className="text-base font-bold text-slate-700">No classes found</p>
+                          <p className="text-sm text-slate-400 mt-1">Try adjusting your search criteria.</p>
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -315,141 +324,127 @@ export default function ClassesPage() {
             </table>
           </div>
 
-          <div className="border-t border-slate-200 px-4 py-3">
-            <Pagination
-              totalItems={rows.length}
-              currentPage={safeCurrentPage}
-              pageSize={pageSize}
-              onPageChange={setCurrentPage}
-              onPageSizeChange={(size) => {
-                setPageSize(size);
-                setCurrentPage(1);
-              }}
-              pageSizeOptions={[10, 20, 50]}
-            />
-          </div>
+          {rows.length > 0 && (
+            <div className="border-t border-slate-100 px-4 py-3 bg-slate-50/30">
+              <Pagination
+                totalItems={rows.length}
+                currentPage={safeCurrentPage}
+                pageSize={pageSize}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={size => { setPageSize(size); setCurrentPage(1); }}
+                pageSizeOptions={[10, 20, 50]}
+              />
+            </div>
+          )}
         </div>
       </motion.div>
 
-      {selectedClass && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
-          >
-            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
-              <div>
-                <h3 className="text-lg font-semibold text-slate-900">Class Details</h3>
-                <p className="text-xs text-slate-500">Update class information and assign more students.</p>
-              </div>
-              <button
-                type="button"
-                className="rounded-full p-1 text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-600"
-                onClick={closeDetailModal}
-                aria-label="Close details"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="space-y-5 px-6 py-5">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Input
-                  label="Class Name"
-                  value={editClassName}
-                  onChange={(event) => setEditClassName(event.target.value)}
-                  placeholder="JHS 1"
-                  required
-                />
-                <Input
-                  label="Section"
-                  value={editSection}
-                  onChange={(event) => setEditSection(event.target.value)}
-                  placeholder="A"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Select
-                  label="Class Teacher"
-                  value={editTeacherId}
-                  onChange={(event) => setEditTeacherId(event.target.value)}
-                  options={[
-                    { value: "unassigned", label: "Unassigned" },
-                    ...classTeachers.map((teacher) => ({ value: teacher.id, label: teacher.fullName })),
-                  ]}
-                />
-                <div className="rounded-xl border border-slate-200 p-3 text-sm text-slate-700">
-                  <p className="text-xs text-slate-500">Students</p>
-                  <p className="mt-1 font-medium text-slate-900">{modalTotalStudentCount}</p>
-                  <p className="text-xs text-slate-500">Auto-matched: {modalBaseStudentCount}</p>
+      {/* Edit Modal */}
+      <AnimatePresence>
+        {selectedClass && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 bg-white shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-5">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">Edit Class Details</h3>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">Manage enrollment and teacher assignment.</p>
                 </div>
+                <button onClick={closeDetailModal} className="rounded-full p-2 text-slate-400 hover:bg-white hover:shadow-sm transition-all">
+                  <X size={18} />
+                </button>
               </div>
 
-              <div className="rounded-xl border border-slate-200 p-4">
-                <div className="mb-3 flex items-center gap-2 text-slate-800">
-                  <UserRoundPlus size={16} />
-                  <p className="text-sm font-semibold">Assign More Students</p>
+              <div className="space-y-6 px-6 py-6 font-medium">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <Input label="Class Name" value={editClassName} onChange={e => setEditClassName(e.target.value)} required />
+                  <Input label="Section" value={editSection} onChange={e => setEditSection(e.target.value)} required />
                 </div>
-                <p className="mb-3 text-xs text-slate-500">Select students to include in this class in addition to auto-matched records.</p>
-                <div className="grid max-h-44 grid-cols-1 gap-2 overflow-auto rounded-lg border border-slate-100 p-2 sm:grid-cols-2">
-                  {studentOptions.map((student) => {
-                    const checked = assignedStudentIds.includes(student.id);
-                    return (
-                      <label key={student.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-xs text-slate-700 hover:bg-slate-50">
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <Select
+                    label="Class Teacher"
+                    value={editTeacherId}
+                    onChange={e => setEditTeacherId(e.target.value)}
+                    options={[
+                      { value: "unassigned", label: "Unassigned" },
+                      ...classTeachers.map((t) => ({ value: t.id, label: t.fullName })),
+                    ]}
+                  />
+                  <div className="rounded-2xl bg-emerald-50/50 border border-emerald-100 p-4">
+                    <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Student Insights</p>
+                    <div className="flex items-center justify-between mt-2">
+                      <div className="flex items-center gap-2">
+                        <Users size={16} className="text-emerald-600" />
+                        <span className="text-2xl font-black text-emerald-900">{modalTotalStudentCount}</span>
+                      </div>
+                      <p className="text-[10px] text-emerald-600 font-bold bg-white px-2 py-0.5 rounded-full shadow-xs border border-emerald-100">
+                        Auto-matched: {modalBaseStudentCount}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-100 bg-slate-50/20 p-5">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-slate-900">
+                      <UserRoundPlus size={18} className="text-emerald-500" />
+                      <p className="text-sm font-black">Assign Additional Students</p>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400 bg-white border border-slate-100 px-2 py-0.5 rounded-full">Manual Overrides</span>
+                  </div>
+                  <div className="grid max-h-56 grid-cols-1 gap-2 overflow-y-auto pr-2 custom-scrollbar sm:grid-cols-2">
+                    {studentOptions.map((s) => (
+                      <label key={s.id} className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-100 bg-white p-3 transition-all hover:border-emerald-200 hover:bg-emerald-50/30 group">
                         <input
                           type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleStudentAssignment(student.id)}
-                          className="h-3.5 w-3.5 accent-emerald-600"
+                          checked={assignedStudentIds.includes(s.id)}
+                          onChange={() => toggleStudentAssignment(s.id)}
+                          className="h-4 w-4 rounded-lg border-slate-300 text-emerald-600 focus:ring-emerald-500 accent-emerald-600 transition-all"
                         />
-                        <span>{student.label}</span>
+                        <span className="text-xs font-bold text-slate-700 group-hover:text-emerald-900 transition-colors">{s.label}</span>
                       </label>
-                    );
-                  })}
+                    ))}
+                  </div>
+                </div>
+
+                {modalError && <p className="rounded-xl bg-rose-50 border border-rose-100 px-4 py-3 text-sm font-bold text-rose-600 animate-shake">{modalError}</p>}
+
+                <div className="flex justify-end gap-3 border-t border-slate-100 pt-6">
+                  <Button variant="outline" className="h-11 rounded-xl px-6 font-bold" onClick={closeDetailModal}>Cancel</Button>
+                  <Button className="h-11 rounded-xl px-8 font-black bg-slate-900 text-white hover:bg-slate-800" onClick={updateClassFromModal}>Update Details</Button>
                 </div>
               </div>
-
-              {modalError && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600">{modalError}</p>}
-
-              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-                <Button type="button" variant="outline" className="h-10 px-4" onClick={closeDetailModal}>
-                  Close
-                </Button>
-                <Button type="button" className="h-10 px-4" onClick={updateClassFromModal}>
-                  Update
-                </Button>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {deleteTarget && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-rose-500">
-              <AlertTriangle size={20} />
-            </div>
-            <h4 className="text-center text-base font-semibold text-slate-900">Delete Class?</h4>
-            <p className="mt-2 text-center text-sm text-slate-500">
-              This will remove <span className="font-medium text-slate-700">{deleteTarget.className}{deleteTarget.section}</span> from the directory.
-            </p>
-
-            <div className="mt-5 flex justify-center gap-2">
-              <Button type="button" variant="outline" className="h-10 px-4" onClick={() => setDeleteTarget(null)}>
-                Cancel
-              </Button>
-              <Button type="button" className="h-10 bg-rose-600 px-4 text-white hover:bg-rose-700" onClick={confirmDelete}>
-                Yes, Delete
-              </Button>
-            </div>
+            </motion.div>
           </div>
-        </div>
-      )
-      }
-    </DashboardLayout >
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation */}
+      <AnimatePresence>
+        {deleteTarget && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-sm rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-50 text-rose-500 shadow-sm border border-rose-100">
+                <AlertTriangle size={24} />
+              </div>
+              <h4 className="text-center text-lg font-black text-slate-900">Delete Class?</h4>
+              <p className="mt-2 text-center text-sm text-slate-500 font-medium leading-relaxed">
+                You are about to remove <span className="font-black text-slate-700 underline decoration-rose-300">{deleteTarget.className}{deleteTarget.section}</span>. This action cannot be reversed.
+              </p>
+              <div className="mt-7 flex justify-center gap-3">
+                <Button variant="outline" className="flex-1 h-12 rounded-xl font-bold" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+                <Button className="flex-1 h-12 rounded-xl font-bold bg-rose-600 text-white hover:bg-rose-700 shadow-lg shadow-rose-100" onClick={confirmDelete}>Yes, Delete</Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </DashboardLayout>
   );
 }

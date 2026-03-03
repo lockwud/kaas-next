@@ -83,6 +83,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const isActive = (path: string) => pathname === path;
   const isAcademicsActive = pathname.startsWith("/AdminDashboard/Academics");
+  const isAcademicsSubpage = pathname.startsWith("/AdminDashboard/Academics/");
 
   const isMySchoolActive = [
     "/AdminDashboard/MySchool",
@@ -147,6 +148,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [expandedSections, setExpandedSections] = React.useState<Record<string, boolean>>({
     mySchool: isMySchoolActive,
     schoolManagement: isSchoolManagementActive,
+    academics: isAcademicsSubpage,
     students: isStudentsActive,
     finance: isFinanceActive,
     facility: isFacility,
@@ -305,53 +307,67 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <Link href="/AdminDashboard">
                   <NavItem icon={<LayoutDashboard size={18} />} label="Dashboard" isOpen isSubItem isActive={isActive("/AdminDashboard")} />
                 </Link>
-                <Link href="/AdminDashboard/Academics">
-                  <NavItem icon={<BookOpen size={18} />} label="Academics" isOpen isSubItem isActive={isAcademicsActive} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Classes">
-                  <NavItem icon={<School size={18} />} label="Classes" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Classes")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Students">
-                  <NavItem icon={<Users size={18} />} label="Students" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Students")} />
-                </Link>
+
+                {/* Academics nested dropdown */}
+                <NavItem
+                  icon={<BookOpen size={18} />}
+                  label="Academics"
+                  isOpen={isSidebarOpen}
+                  isActiveParent={isAcademicsActive}
+                  hasChildren
+                  isExpanded={expandedSections.academics}
+                  isSubItem
+                  onClick={() => toggleSection("academics")}
+                />
+                {expandedSections.academics && (
+                  <div className="ml-3 pl-3 border-l border-gray-700/60 flex flex-col gap-1">
+                    <Link href="/AdminDashboard/Academics/Classes">
+                      <NavItem icon={<School size={16} />} label="Classes" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Classes")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/Students">
+                      <NavItem icon={<Users size={16} />} label="Students" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Students")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/Sections">
+                      <NavItem icon={<Layers size={16} />} label="Sections" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Sections")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/Subjects">
+                      <NavItem icon={<BookOpenText size={16} />} label="Subjects" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Subjects")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/TimeTable">
+                      <NavItem icon={<Clock size={16} />} label="Time Table" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/TimeTable")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/Attendance">
+                      <NavItem icon={<CalendarCheck size={16} />} label="Attendance" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Attendance")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/Leaves">
+                      <NavItem icon={<UserPen size={16} />} label="Student Leaves" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Leaves")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/Materials">
+                      <NavItem icon={<BookOpen size={16} />} label="Study Materials" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Materials")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/Homework">
+                      <NavItem icon={<FileText size={16} />} label="Home Work" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Homework")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/NoticeBoard">
+                      <NavItem icon={<Megaphone size={16} />} label="Notice Board" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/NoticeBoard")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/Events">
+                      <NavItem icon={<Calendar size={16} />} label="Events" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Events")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/LiveClasses">
+                      <NavItem icon={<Video size={16} />} label="Live Classes" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/LiveClasses")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/Assessments">
+                      <NavItem icon={<Table2 size={16} />} label="Assessments" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Assessments")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/Reports">
+                      <NavItem icon={<FileText size={16} />} label="Terminal Reports" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Reports")} />
+                    </Link>
+                  </div>
+                )}
+
                 <Link href="/AdminDashboard/Sessions">
                   <NavItem icon={<Calendar size={18} />} label="Sessions" isOpen isSubItem isActive={isActive("/AdminDashboard/Sessions")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Sections">
-                  <NavItem icon={<Layers size={18} />} label="Sections" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Sections")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Subjects">
-                  <NavItem icon={<BookOpenText size={18} />} label="Subjects" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Subjects")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/TimeTable">
-                  <NavItem icon={<Clock size={18} />} label="Time Table" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/TimeTable")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Attendance">
-                  <NavItem icon={<CalendarCheck size={18} />} label="Attendance" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Attendance")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Leaves">
-                  <NavItem icon={<UserPen size={18} />} label="Student Leaves" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Leaves")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Materials">
-                  <NavItem icon={<BookOpen size={18} />} label="Study Materials" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Materials")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Homework">
-                  <NavItem icon={<FileText size={18} />} label="Home Work" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Homework")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/NoticeBoard">
-                  <NavItem icon={<Megaphone size={18} />} label="Notice Board" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/NoticeBoard")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Events">
-                  <NavItem icon={<Calendar size={18} />} label="Events" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Events")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/LiveClasses">
-                  <NavItem icon={<Video size={18} />} label="Live Classes" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/LiveClasses")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Assessments">
-                  <NavItem icon={<Table2 size={18} />} label="Assessments" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Assessments")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Reports">
-                  <NavItem icon={<FileText size={18} />} label="Terminal Reports" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Reports")} />
                 </Link>
                 <Link href="/AdminDashboard/DataCenter">
                   <NavItem icon={<Table2 size={18} />} label="Data Center" isOpen isSubItem isActive={isActive("/AdminDashboard/DataCenter")} />

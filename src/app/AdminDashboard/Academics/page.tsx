@@ -8,7 +8,7 @@ import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
 import { motion, Variants } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { CalendarDays, Layers, Sparkles, UserRoundPlus, UsersRound, X } from "lucide-react";
+import { CalendarDays, Layers, Sparkles, UserRoundPlus, UsersRound, X, GraduationCap, BarChart3, School, Users, BookOpenText, Clock, CalendarCheck, UserPen, BookOpen, FileText, Megaphone, Calendar, Video, ClipboardList } from "lucide-react";
 import { createClassRecord, hasDuplicateClass, loadClasses, saveClasses } from "../../../lib/classes-storage";
 import { createStudentDirectoryRecord, loadStudentsDirectory, saveStudentsDirectory } from "../../../lib/students-storage";
 import { students, users } from "../../../lib/school-data";
@@ -80,20 +80,20 @@ export default function AcademicsDashboard() {
   const [classDirectory, setClassDirectory] = React.useState(loadClasses());
 
   const cards = [
-    { title: "Assessments", path: "/AdminDashboard/Academics/Assessments" },
-    { title: "Terminal Reports", path: "/AdminDashboard/Academics/Reports" },
-    { title: "Classes", path: "/AdminDashboard/Academics/Classes" },
-    { title: "Students", path: "/AdminDashboard/Academics/Students" },
-    { title: "Sections", path: "/AdminDashboard/Academics/Sections" },
-    { title: "Subjects", path: "/AdminDashboard/Academics/Subjects" },
-    { title: "Time Table", path: "/AdminDashboard/Academics/TimeTable" },
-    { title: "Attendance", path: "/AdminDashboard/Academics/Attendance" },
-    { title: "Student Leaves", path: "/AdminDashboard/Academics/Leaves" },
-    { title: "Study Materials", path: "/AdminDashboard/Academics/Materials" },
-    { title: "Home Work", path: "/AdminDashboard/Academics/Homework" },
-    { title: "Notice Board", path: "/AdminDashboard/Academics/NoticeBoard" },
-    { title: "Events", path: "/AdminDashboard/Academics/Events" },
-    { title: "Live Classes (Go Pro)", path: "/AdminDashboard/Academics/LiveClasses" },
+    { title: "Assessments", path: "/AdminDashboard/Academics/Assessments", icon: <ClipboardList size={18} />, description: "Build and manage term assessments", accent: "from-blue-400 to-blue-600" },
+    { title: "Terminal Reports", path: "/AdminDashboard/Academics/Reports", icon: <BarChart3 size={18} />, description: "Generate and deliver term reports", accent: "from-emerald-400 to-teal-600" },
+    { title: "Classes", path: "/AdminDashboard/Academics/Classes", icon: <School size={18} />, description: "Create and manage class groups", accent: "from-violet-400 to-violet-600" },
+    { title: "Students", path: "/AdminDashboard/Academics/Students", icon: <GraduationCap size={18} />, description: "Register and manage students", accent: "from-amber-400 to-orange-500" },
+    { title: "Sections", path: "/AdminDashboard/Academics/Sections", icon: <Layers size={18} />, description: "Organize class sections & capacity", accent: "from-pink-400 to-rose-500" },
+    { title: "Subjects", path: "/AdminDashboard/Academics/Subjects", icon: <BookOpenText size={18} />, description: "Configure core & elective subjects", accent: "from-cyan-400 to-sky-600" },
+    { title: "Time Table", path: "/AdminDashboard/Academics/TimeTable", icon: <Clock size={18} />, description: "Manage daily class schedules", accent: "from-indigo-400 to-indigo-600" },
+    { title: "Attendance", path: "/AdminDashboard/Academics/Attendance", icon: <CalendarCheck size={18} />, description: "Track daily student attendance", accent: "from-green-400 to-emerald-600" },
+    { title: "Student Leaves", path: "/AdminDashboard/Academics/Leaves", icon: <UserPen size={18} />, description: "Approve and manage leave requests", accent: "from-rose-400 to-red-600" },
+    { title: "Study Materials", path: "/AdminDashboard/Academics/Materials", icon: <BookOpen size={18} />, description: "Upload PDFs, videos, and docs", accent: "from-amber-400 to-yellow-500" },
+    { title: "Homework", path: "/AdminDashboard/Academics/Homework", icon: <FileText size={18} />, description: "Assign and track class homework", accent: "from-teal-400 to-cyan-600" },
+    { title: "Notice Board", path: "/AdminDashboard/Academics/NoticeBoard", icon: <Megaphone size={18} />, description: "Post school announcements", accent: "from-orange-400 to-amber-600" },
+    { title: "Events", path: "/AdminDashboard/Academics/Events", icon: <Calendar size={18} />, description: "Schedule and manage school events", accent: "from-violet-400 to-fuchsia-600" },
+    { title: "Live Classes", path: "/AdminDashboard/Academics/LiveClasses", icon: <Video size={18} />, description: "Host virtual classes (Pro)", accent: "from-purple-400 to-violet-700" },
   ];
 
   const classTeachers = React.useMemo(() => users.filter((user) => user.role === "class_teacher"), []);
@@ -423,6 +423,9 @@ export default function AcademicsDashboard() {
           <motion.div key={card.title} variants={itemVariants}>
             <DashboardCard
               title={card.title}
+              icon={card.icon}
+              description={card.description}
+              accentColor={card.accent}
               compact
               onView={() => (card.path ? router.push(card.path) : console.log(`View ${card.title}`))}
               onAdd={() => handleAdd(card.title, card.path)}
