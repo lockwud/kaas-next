@@ -9,6 +9,7 @@ import { motion } from "framer-motion";
 import { Shield, Users, Plus, ChevronLeft, X, Check, Lock } from "lucide-react";
 import { useToast } from "@/hooks/useToast";
 import Link from "next/link";
+import { apiRequest } from "@/lib/api-client";
 
 interface RoleRow {
     id: string;
@@ -18,15 +19,56 @@ interface RoleRow {
 }
 
 export default function UserRolesPage() {
-    const { success } = useToast();
+    const { success, error } = useToast();
     const [isModalOpen, setIsModalOpen] = React.useState(false);
+    const [isLoading, setIsLoading] = React.useState(true);
+    const [isCreating, setIsCreating] = React.useState(false);
+    const [roles, setRoles] = React.useState<RoleRow[]>([]);
+    const [newRoleTitle, setNewRoleTitle] = React.useState("");
+    const [newRoleDescription, setNewRoleDescription] = React.useState("");
 
-    const roles: RoleRow[] = [
-        { id: "R-01", role: "Super Admin", usersCount: 2, description: "Full system access, all modules." },
-        { id: "R-02", role: "Principal", usersCount: 1, description: "Administrative access to academic and finance." },
-        { id: "R-03", role: "Accountant", usersCount: 2, description: "Access to finance and billing modules only." },
-        { id: "R-04", role: "Teacher", usersCount: 45, description: "Access to assigned class and subject tools." },
-    ];
+    React.useEffect(() => {
+        const load = async () => {
+            try {
+                const payload = await apiRequest<RoleRow[]>("/settings/user-roles");
+                setRoles(payload);
+            } catch (err) {
+                error(err instanceof Error ? err.message : "Unable to load user roles.");
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        void load();
+    }, [error]);
+
+    const createRole = async (event: React.MouseEvent<HTMLButtonElement>) => {
+        event.preventDefault();
+        if (!newRoleTitle.trim() || !newRoleDescription.trim()) {
+            error("Role title and description are required.");
+            return;
+        }
+
+        setIsCreating(true);
+        try {
+            const payload = await apiRequest<RoleRow>("/settings/user-roles", {
+                method: "POST",
+                body: JSON.stringify({
+                    role: newRoleTitle.trim(),
+                    description: newRoleDescription.trim(),
+                }),
+            });
+            setRoles((current) => [payload, ...current]);
+            success("New role has been created successfully.");
+            setIsModalOpen(false);
+            setNewRoleTitle("");
+            setNewRoleDescription("");
+        } catch (err) {
+            error(err instanceof Error ? err.message : "Unable to create role.");
+        } finally {
+            setIsCreating(false);
+        }
+    };
 
     return (
         <DashboardLayout>
@@ -77,6 +119,7 @@ export default function UserRolesPage() {
                             },
                         ]}
                         data={roles}
+                        loading={isLoading}
                         actions={() => (
                             <Button variant="ghost" className="text-xs text-blue-600 font-bold">Edit Permissions</Button>
                         )}
@@ -123,12 +166,14 @@ export default function UserRolesPage() {
                             <button onClick={() => setIsModalOpen(false)} className="rounded-full p-1 text-slate-500 hover:bg-slate-200"><X size={18} /></button>
                         </div>
                         <div className="p-6 space-y-4">
-                            <Input label="Role Title" placeholder="e.g. Librarian" required />
+                            <Input label="Role Title" placeholder="e.g. Librarian" value={newRoleTitle} onChange={(event) => setNewRoleTitle(event.target.value)} required />
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-slate-700">Description</label>
                                 <textarea
                                     className="w-full min-h-20 rounded-lg border border-slate-200 p-3 text-sm focus:ring-2 focus:ring-emerald-600 outline-none"
                                     placeholder="Purpose of this role..."
+                                    value={newRoleDescription}
+                                    onChange={(event) => setNewRoleDescription(event.target.value)}
                                 />
                             </div>
                             <div className="p-4 bg-blue-50 rounded-xl border border-blue-100 text-[11px] text-blue-700">
@@ -136,7 +181,7 @@ export default function UserRolesPage() {
                             </div>
                             <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
                                 <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-                                <Button className="bg-slate-900 text-white hover:bg-slate-800" onClick={(e) => { e.preventDefault(); success("New role has been created successfully."); setIsModalOpen(false); }}>Create Role</Button>
+                                <Button className="bg-slate-900 text-white hover:bg-slate-800" onClick={createRole} isLoading={isCreating}>Create Role</Button>
                             </div>
                         </div>
                     </motion.div>

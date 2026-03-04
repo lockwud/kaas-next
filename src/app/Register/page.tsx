@@ -7,6 +7,39 @@ import AuthLayout from "../../components/AuthLayout";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { motion, Variants } from "framer-motion";
+import { apiRequest } from "@/lib/api-client";
+import { extractSessionTokens, setRoleKey, setSessionTokens } from "@/lib/auth-session";
+
+type RegisterResponse = {
+  token?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  onboardingRequired: boolean;
+  user: {
+    id: string;
+    email: string;
+    isActive: boolean;
+    createdAt: string;
+  };
+};
+
+type OnboardingResponse = {
+  school: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+  branch: {
+    id: string;
+    name: string;
+    code: string;
+  };
+  proprietor: {
+    id: string;
+    role: string;
+    fullName: string;
+  };
+};
 
 export default function Register() {
   const router = useRouter();
@@ -59,19 +92,66 @@ export default function Register() {
     setIsLoading(true);
 
     try {
-      const token = `demo-${Date.now()}`;
-      localStorage.setItem("kaas_token", token);
-      localStorage.setItem("kaas_school_id", "demo-school");
-      localStorage.setItem("kaas_branch_id", "demo-branch");
-      localStorage.setItem("kaas_user_name", form.proprietorFullName);
-      localStorage.setItem("kaas_user_email", form.email);
-      localStorage.setItem("kaas_user_role", "Proprietor");
-      localStorage.setItem("kaas_school_name", form.schoolName);
+      const registration = await apiRequest<RegisterResponse>("/auth/register", {
+        method: "POST",
+        body: JSON.stringify({
+          email: form.email,
+          password: form.password,
+        }),
+      });
+      const tokens = extractSessionTokens(registration);
+      if (!tokens) {
+        throw new Error("Registration response did not include a valid access token.");
+      }
 
-      setSuccessMessage("Demo account created. API integration is currently disabled.");
+      const onboarding = await apiRequest<OnboardingResponse>("/onboarding/school", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${tokens.accessToken}`,
+        },
+        body: JSON.stringify({
+          proprietorFullName: form.proprietorFullName,
+          school: {
+            name: form.schoolName,
+            email: form.email,
+            phone: form.schoolPhone,
+            address: form.schoolAddress,
+            state: form.schoolState,
+            district: form.schoolDistrict,
+            country: form.schoolCountry,
+            timezone: form.schoolTimezone,
+            registrationNumber: form.schoolRegistrationNumber,
+            taxNumber: form.schoolTaxNumber || undefined,
+          },
+          branch: {
+            code: form.branchCode,
+            name: form.branchName,
+            email: form.email,
+            phone: form.schoolPhone,
+            address: form.schoolAddress,
+            state: form.schoolState,
+            district: form.schoolDistrict,
+            country: form.schoolCountry,
+            timezone: form.schoolTimezone,
+            registrationNumber: form.schoolRegistrationNumber,
+            taxNumber: form.schoolTaxNumber || undefined,
+          },
+        }),
+      });
+
+      setSessionTokens(tokens);
+      localStorage.setItem("kaas_school_id", onboarding.school.id);
+      localStorage.setItem("kaas_branch_id", onboarding.branch.id);
+      localStorage.setItem("kaas_user_name", form.proprietorFullName);
+      localStorage.setItem("kaas_user_email", registration.user.email);
+      localStorage.setItem("kaas_user_role", "Proprietor");
+      setRoleKey("proprietor");
+      localStorage.setItem("kaas_school_name", onboarding.school.name);
+
+      setSuccessMessage("School onboarding completed successfully.");
       router.push("/AdminDashboard");
-    } catch {
-      setErrorMessage("Something went wrong.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Something went wrong.");
     } finally {
       setIsLoading(false);
     }

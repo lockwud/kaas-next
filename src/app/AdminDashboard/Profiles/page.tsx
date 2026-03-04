@@ -6,7 +6,7 @@ import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/useToast";
-import { UserCircle, Shield, Mail, Phone, MapPin, Camera, Key, History, Lock, X, Smartphone, Globe, LogOut, Check } from "lucide-react";
+import { UserCircle, Shield, Mail, Phone, MapPin, Camera, Key, History, Lock, X, Smartphone, Globe, Check } from "lucide-react";
 
 export default function ProfilesPage() {
     const { success } = useToast();
@@ -163,55 +163,71 @@ export default function ProfilesPage() {
             {/* Security Settings Modal */}
             <AnimatePresence>
                 {isSecurityModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm overflow-hidden">
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
                         <motion.div
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95 }}
-                            className="w-full max-w-lg h-full  rounded-xl border border-slate-200 bg-white shadow-2xl overflow-y-auto"
+                            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
                         >
                             <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="h-9 w-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-md">
-                                        <Lock size={18} />
-                                    </div>
-                                    <h3 className="text-lg font-bold text-slate-900">Account Security</h3>
+                                <div>
+                                    <h3 className="text-lg font-semibold text-slate-900">Account Security</h3>
+                                    <p className="text-xs text-slate-500">Manage password, 2FA, and active sessions.</p>
                                 </div>
-                                <button onClick={() => setIsSecurityModalOpen(false)} className="rounded-full p-1.5 text-slate-500 hover:bg-slate-200 transition-colors"><X size={18} /></button>
+                                <button
+                                    onClick={() => setIsSecurityModalOpen(false)}
+                                    className="rounded-full p-1 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700"
+                                    aria-label="Close modal"
+                                >
+                                    <X size={18} />
+                                </button>
                             </div>
-                            <div className="p-6 space-y-6">
+                            <div className="space-y-5 px-6 py-5">
                                 {/* Password Change */}
-                                <div className="space-y-4">
-                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Password Update</h4>
+                                <div className="rounded-xl border border-slate-200 p-4">
+                                    <div className="mb-3 flex items-center gap-2 text-slate-800">
+                                        <Key size={16} />
+                                        <p className="text-sm font-semibold">Password Update</p>
+                                    </div>
                                     <Input label="Current Password" type="password" />
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                                         <Input label="New Password" type="password" />
                                         <Input label="Verify Password" type="password" />
                                     </div>
-                                    <Button className="w-full bg-slate-900 text-white font-bold h-11 hover:bg-slate-800">Refresh Security Key</Button>
+                                    <Button className="mt-4 w-full bg-slate-900 text-white font-semibold hover:bg-slate-800">
+                                        Refresh Security Key
+                                    </Button>
                                 </div>
 
-                                <div className="h-px bg-slate-100"></div>
-
                                 {/* 2FA Toggle */}
-                                <div className="flex items-center justify-between p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
-                                    <div className="flex gap-4">
-                                        <div className="h-10 w-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center shadow-md shrink-0">
-                                            <Smartphone size={20} />
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-bold text-indigo-900">2-Factor Authentication</p>
-                                            <p className="text-xs text-indigo-700 font-medium">Add an extra layer of security to your account.</p>
-                                        </div>
+                                <div className="rounded-xl border border-slate-200 p-4">
+                                    <div className="mb-3 flex items-center gap-2 text-slate-800">
+                                        <Shield size={16} />
+                                        <p className="text-sm font-semibold">Two-Factor Authentication</p>
                                     </div>
-                                    <button className="h-6 w-11 bg-slate-300 rounded-full relative transition-colors">
-                                        <div className="absolute left-1 top-1 h-4 w-4 bg-white rounded-full"></div>
-                                    </button>
+                                    <div className="flex items-center justify-between rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+                                        <div className="flex gap-4">
+                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md">
+                                            <Smartphone size={20} />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-semibold text-indigo-900">2-Factor Authentication</p>
+                                                <p className="text-xs text-indigo-700">Add an extra layer of security to your account.</p>
+                                            </div>
+                                        </div>
+                                        <button className="relative h-6 w-11 rounded-full bg-slate-300 transition-colors">
+                                            <div className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white" />
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* Active Sessions */}
-                                <div>
-                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Active Authorization Sessions</h4>
+                                <div className="rounded-xl border border-slate-200 p-4">
+                                    <div className="mb-3 flex items-center gap-2 text-slate-800">
+                                        <History size={16} />
+                                        <p className="text-sm font-semibold">Active Authorization Sessions</p>
+                                    </div>
                                     <div className="space-y-3">
                                         <div className="flex items-center justify-between text-xs p-3 border border-slate-100 rounded-xl">
                                             <div className="flex items-center gap-3">
@@ -230,9 +246,13 @@ export default function ProfilesPage() {
                                     </div>
                                 </div>
 
-                                <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
-                                    <Button variant="outline" onClick={() => setIsSecurityModalOpen(false)}>Dismiss</Button>
-                                    <Button className="bg-emerald-600 text-white hover:bg-emerald-700 font-bold px-8"><Check size={16} className="mr-2" /> Commit Settings</Button>
+                                <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                                    <Button variant="outline" onClick={() => setIsSecurityModalOpen(false)}>
+                                        Dismiss
+                                    </Button>
+                                    <Button className="bg-emerald-600 text-white hover:bg-emerald-700 font-semibold px-8">
+                                        <Check size={16} className="mr-2" /> Save
+                                    </Button>
                                 </div>
                             </div>
                         </motion.div>
@@ -255,8 +275,17 @@ function ProfileInfoItem({ icon, label, value }: { icon: React.ReactNode; label:
     );
 }
 
-function SecurityActionItem({ icon, label, desc, onClick, color, badge }: any) {
-    const colors: any = {
+type SecurityActionItemProps = {
+    icon: React.ReactNode;
+    label: string;
+    desc: string;
+    onClick: () => void;
+    color: "orange" | "indigo";
+    badge?: string;
+};
+
+function SecurityActionItem({ icon, label, desc, onClick, color, badge }: SecurityActionItemProps) {
+    const colors: Record<"orange" | "indigo", string> = {
         orange: "bg-orange-50 text-orange-600 border-orange-100 hover:border-orange-200",
         indigo: "bg-indigo-50 text-indigo-600 border-indigo-100 hover:border-indigo-200"
     };
@@ -278,7 +307,7 @@ function SecurityActionItem({ icon, label, desc, onClick, color, badge }: any) {
     );
 }
 
-function ArrowRight({ size, className }: any) {
+function ArrowRight({ size, className }: { size: number; className?: string }) {
     return (
         <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
             <path d="M5 12h14M12 5l7 7-7 7" />

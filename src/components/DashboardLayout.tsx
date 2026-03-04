@@ -16,38 +16,24 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   School,
+  ShieldAlert,
   Settings,
   Table2,
   UserCircle,
   FileText,
   Users2,
   Users,
-  Folder,
-  CreditCardIcon,
-  TrendingUp,
-  ChartBarDecreasing,
-  LucideWalletCards,
-  LucideWallet,
-  ClipboardCheck,
-  ChartColumnDecreasing,
-  ChartLine,
-  School2,
-  ForkKnifeCrossedIcon,
-  MapPinHouse,
   BookOpenText,
-  ToolCase,
   CalendarCheck,
-  CarTaxiFront,
-  IdCardIcon,
-  IdCardLanyard,
   UserPen,
   Video,
   Megaphone,
-  Briefcase,
   Layers,
   Clock,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
+import { AppRole, clearAuthSession, getAccessToken, getRoleKey } from "@/lib/auth-session";
+import { canAccessPath } from "@/lib/rbac";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -58,6 +44,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = React.useState(false);
   const [isAuthReady, setIsAuthReady] = React.useState(false);
+  const [currentRole, setCurrentRole] = React.useState<AppRole>("guest");
+  const [isAccessDenied, setIsAccessDenied] = React.useState(false);
   const [profileName, setProfileName] = React.useState("User");
   const [profileRole, setProfileRole] = React.useState("General Manager");
   const [profileSchool, setProfileSchool] = React.useState("Kaas Montessori School");
@@ -147,6 +135,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [expandedSections, setExpandedSections] = React.useState<Record<string, boolean>>({
     mySchool: isMySchoolActive,
     schoolManagement: isSchoolManagementActive,
+    academics: isAcademicsActive,
     students: isStudentsActive,
     finance: isFinanceActive,
     facility: isFacility,
@@ -161,11 +150,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   };
 
   React.useEffect(() => {
-    const token = localStorage.getItem("kaas_token");
+    const token = getAccessToken();
     const storedName = localStorage.getItem("kaas_user_name")?.trim();
     const storedEmail = localStorage.getItem("kaas_user_email")?.trim();
     const storedRole = localStorage.getItem("kaas_user_role")?.trim();
     const storedSchool = localStorage.getItem("kaas_school_name")?.trim();
+
+    if (!token) {
+      router.replace("/Login");
+      return;
+    }
 
     const emailLocalPart = storedEmail?.split("@")[0]?.replace(/[._-]+/g, " ");
     const fallbackFromEmail = emailLocalPart
@@ -176,14 +170,25 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         .join(" ")
       : "User";
 
-    const defaultGuestName = token ? "User" : "Guest User";
-    const defaultGuestRole = token ? "General Manager" : "Guest";
+    const defaultGuestName = "User";
+    const defaultGuestRole = "General Manager";
 
     setProfileName(storedName || fallbackFromEmail || defaultGuestName);
     setProfileRole(storedRole || defaultGuestRole);
     setProfileSchool(storedSchool || "Kaas Montessori School");
+    setCurrentRole(getRoleKey());
     setIsAuthReady(true);
   }, [router]);
+
+  React.useEffect(() => {
+    if (!isAuthReady) return;
+    const token = getAccessToken();
+    if (!token) return;
+
+    const role = getRoleKey();
+    setCurrentRole(role);
+    setIsAccessDenied(!canAccessPath(pathname, role));
+  }, [isAuthReady, pathname]);
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -199,18 +204,21 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const profileInitials = React.useMemo(() => toInitials(profileName), [profileName, toInitials]);
 
   const logout = () => {
-    localStorage.removeItem("kaas_token");
-    localStorage.removeItem("kaas_school_id");
-    localStorage.removeItem("kaas_user_name");
-    localStorage.removeItem("kaas_user_email");
-    localStorage.removeItem("kaas_user_role");
-    localStorage.removeItem("kaas_school_name");
+    clearAuthSession();
     router.replace("/Login");
   };
 
   if (!isAuthReady) {
     return <div className="min-h-screen bg-gray-50" />;
   }
+
+  const canAccessMySchoolDashboard = canAccessPath("/AdminDashboard/MySchool/Dashboard", currentRole);
+  const canAccessUsersManagement = canAccessPath("/AdminDashboard/MySchool", currentRole);
+  const canAccessSupports = canAccessPath("/AdminDashboard/Supports", currentRole);
+  const canAccessOrganization = canAccessPath("/AdminDashboard/Organization", currentRole);
+  const canAccessSettings = canAccessPath("/AdminDashboard/Settings", currentRole);
+  const canAccessBilling = canAccessPath("/AdminDashboard/Billing", currentRole);
+  const canAccessProfiles = canAccessPath("/AdminDashboard/Profiles", currentRole);
 
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -252,39 +260,53 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             />
             {isSidebarOpen && expandedSections.mySchool && (
               <div className="ml-4 pl-4 border-l border-gray-700 mt-2 space-y-1 flex flex-col gap-2">
-                <Link href="/AdminDashboard/MySchool/Dashboard">
-                  <NavItem
-                    icon={<LayoutDashboard size={18} />}
-                    label="Management Dashboard"
-                    isOpen
-                    isSubItem
-                    isActive={isActive("/AdminDashboard/MySchool/Dashboard")}
-                  />
-                </Link>
-                <Link href="/AdminDashboard/MySchool">
-                  <NavItem
-                    icon={<Users2 size={18} />}
-                    label="Users Management"
-                    isOpen
-                    isSubItem
-                    isActive={isActive("/AdminDashboard/MySchool")}
-                  />
-                </Link>
-                <Link href="/AdminDashboard/Supports">
-                  <NavItem icon={<LifeBuoy size={18} />} label="Supports" isOpen isSubItem isActive={isActive("/AdminDashboard/Supports")} />
-                </Link>
-                <Link href="/AdminDashboard/Organization">
-                  <NavItem icon={<Building2 size={18} />} label="Organization" isOpen isSubItem isActive={isActive("/AdminDashboard/Organization")} />
-                </Link>
-                <Link href="/AdminDashboard/Settings">
-                  <NavItem icon={<Settings size={18} />} label="Settings Hub" isOpen isSubItem isActive={isActive("/AdminDashboard/Settings")} />
-                </Link>
-                <Link href="/AdminDashboard/Billing">
-                  <NavItem icon={<CreditCard size={18} />} label="Billing" isOpen isSubItem isActive={isActive("/AdminDashboard/Billing")} />
-                </Link>
-                <Link href="/AdminDashboard/Profiles">
-                  <NavItem icon={<UserCircle size={18} />} label="Profiles" isOpen isSubItem isActive={isActive("/AdminDashboard/Profiles")} />
-                </Link>
+                {canAccessMySchoolDashboard && (
+                  <Link href="/AdminDashboard/MySchool/Dashboard">
+                    <NavItem
+                      icon={<LayoutDashboard size={18} />}
+                      label="Management Dashboard"
+                      isOpen
+                      isSubItem
+                      isActive={isActive("/AdminDashboard/MySchool/Dashboard")}
+                    />
+                  </Link>
+                )}
+                {canAccessUsersManagement && (
+                  <Link href="/AdminDashboard/MySchool">
+                    <NavItem
+                      icon={<Users2 size={18} />}
+                      label="Users Management"
+                      isOpen
+                      isSubItem
+                      isActive={isActive("/AdminDashboard/MySchool")}
+                    />
+                  </Link>
+                )}
+                {canAccessSupports && (
+                  <Link href="/AdminDashboard/Supports">
+                    <NavItem icon={<LifeBuoy size={18} />} label="Supports" isOpen isSubItem isActive={isActive("/AdminDashboard/Supports")} />
+                  </Link>
+                )}
+                {canAccessOrganization && (
+                  <Link href="/AdminDashboard/Organization">
+                    <NavItem icon={<Building2 size={18} />} label="Organization" isOpen isSubItem isActive={isActive("/AdminDashboard/Organization")} />
+                  </Link>
+                )}
+                {canAccessSettings && (
+                  <Link href="/AdminDashboard/Settings">
+                    <NavItem icon={<Settings size={18} />} label="Settings Hub" isOpen isSubItem isActive={isActive("/AdminDashboard/Settings")} />
+                  </Link>
+                )}
+                {canAccessBilling && (
+                  <Link href="/AdminDashboard/Billing">
+                    <NavItem icon={<CreditCard size={18} />} label="Billing" isOpen isSubItem isActive={isActive("/AdminDashboard/Billing")} />
+                  </Link>
+                )}
+                {canAccessProfiles && (
+                  <Link href="/AdminDashboard/Profiles">
+                    <NavItem icon={<UserCircle size={18} />} label="Profiles" isOpen isSubItem isActive={isActive("/AdminDashboard/Profiles")} />
+                  </Link>
+                )}
               </div>
             )}
           </div>
@@ -305,53 +327,75 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <Link href="/AdminDashboard">
                   <NavItem icon={<LayoutDashboard size={18} />} label="Dashboard" isOpen isSubItem isActive={isActive("/AdminDashboard")} />
                 </Link>
-                <Link href="/AdminDashboard/Academics">
-                  <NavItem icon={<BookOpen size={18} />} label="Academics" isOpen isSubItem isActive={isAcademicsActive} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Classes">
-                  <NavItem icon={<School size={18} />} label="Classes" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Classes")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Students">
-                  <NavItem icon={<Users size={18} />} label="Students" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Students")} />
-                </Link>
+
+                <NavItem
+                  icon={<BookOpen size={18} />}
+                  label="Academics"
+                  isOpen
+                  isSubItem
+                  isActiveParent={isAcademicsActive}
+                  hasChildren
+                  isExpanded={expandedSections.academics}
+                  onClick={() => toggleSection("academics")}
+                />
+
+                {expandedSections.academics && (
+                  <div className="ml-3 pl-3 border-l border-slate-700/60 space-y-2">
+                    <p className="px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Structure</p>
+                    <Link href="/AdminDashboard/Academics">
+                      <NavItem icon={<BookOpen size={16} />} label="Overview" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/Classes">
+                      <NavItem icon={<School size={16} />} label="Classes" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Classes")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/Students">
+                      <NavItem icon={<Users size={16} />} label="Students" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Students")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/Sections">
+                      <NavItem icon={<Layers size={16} />} label="Sections" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Sections")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/Subjects">
+                      <NavItem icon={<BookOpenText size={16} />} label="Subjects" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Subjects")} />
+                    </Link>
+
+                    <p className="px-2 pt-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Learning</p>
+                    <Link href="/AdminDashboard/Academics/TimeTable">
+                      <NavItem icon={<Clock size={16} />} label="Time Table" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/TimeTable")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/Attendance">
+                      <NavItem icon={<CalendarCheck size={16} />} label="Attendance" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Attendance")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/Leaves">
+                      <NavItem icon={<UserPen size={16} />} label="Student Leaves" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Leaves")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/Materials">
+                      <NavItem icon={<BookOpen size={16} />} label="Study Materials" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Materials")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/Homework">
+                      <NavItem icon={<FileText size={16} />} label="Home Work" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Homework")} />
+                    </Link>
+
+                    <p className="px-2 pt-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Assessment & Engagement</p>
+                    <Link href="/AdminDashboard/Academics/Assessments">
+                      <NavItem icon={<Table2 size={16} />} label="Assessments" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Assessments")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/Reports">
+                      <NavItem icon={<FileText size={16} />} label="Terminal Reports" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Reports")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/NoticeBoard">
+                      <NavItem icon={<Megaphone size={16} />} label="Notice Board" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/NoticeBoard")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/Events">
+                      <NavItem icon={<Calendar size={16} />} label="Events" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Events")} />
+                    </Link>
+                    <Link href="/AdminDashboard/Academics/LiveClasses">
+                      <NavItem icon={<Video size={16} />} label="Live Classes" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/LiveClasses")} />
+                    </Link>
+                  </div>
+                )}
+
                 <Link href="/AdminDashboard/Sessions">
                   <NavItem icon={<Calendar size={18} />} label="Sessions" isOpen isSubItem isActive={isActive("/AdminDashboard/Sessions")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Sections">
-                  <NavItem icon={<Layers size={18} />} label="Sections" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Sections")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Subjects">
-                  <NavItem icon={<BookOpenText size={18} />} label="Subjects" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Subjects")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/TimeTable">
-                  <NavItem icon={<Clock size={18} />} label="Time Table" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/TimeTable")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Attendance">
-                  <NavItem icon={<CalendarCheck size={18} />} label="Attendance" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Attendance")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Leaves">
-                  <NavItem icon={<UserPen size={18} />} label="Student Leaves" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Leaves")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Materials">
-                  <NavItem icon={<BookOpen size={18} />} label="Study Materials" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Materials")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Homework">
-                  <NavItem icon={<FileText size={18} />} label="Home Work" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Homework")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/NoticeBoard">
-                  <NavItem icon={<Megaphone size={18} />} label="Notice Board" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/NoticeBoard")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Events">
-                  <NavItem icon={<Calendar size={18} />} label="Events" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Events")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/LiveClasses">
-                  <NavItem icon={<Video size={18} />} label="Live Classes" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/LiveClasses")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Assessments">
-                  <NavItem icon={<Table2 size={18} />} label="Assessments" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Assessments")} />
-                </Link>
-                <Link href="/AdminDashboard/Academics/Reports">
-                  <NavItem icon={<FileText size={18} />} label="Terminal Reports" isOpen isSubItem isActive={isActive("/AdminDashboard/Academics/Reports")} />
                 </Link>
                 <Link href="/AdminDashboard/DataCenter">
                   <NavItem icon={<Table2 size={18} />} label="Data Center" isOpen isSubItem isActive={isActive("/AdminDashboard/DataCenter")} />
@@ -558,7 +602,21 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
         </header>
 
-        <main className="relative overflow-y-auto h-full p-8">{children}</main>
+        <main className="relative overflow-y-auto h-full p-8">
+          {isAccessDenied ? (
+            <div className="mx-auto flex h-full max-w-3xl items-center justify-center">
+              <div className="w-full rounded-2xl border border-rose-200 bg-rose-50 p-8 text-center shadow-sm">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                  <ShieldAlert size={22} />
+                </div>
+                <h2 className="text-xl font-semibold text-rose-900">Forbidden</h2>
+                <p className="mt-2 text-sm text-rose-700">
+                  You do not have permission to access this page with your current role.
+                </p>
+              </div>
+            </div>
+          ) : children}
+        </main>
       </div>
     </div>
   );

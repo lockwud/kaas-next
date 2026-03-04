@@ -8,6 +8,7 @@ import { motion } from "framer-motion";
 import { Bell, Mail, Smartphone, History, ChevronLeft, Settings2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/useToast";
 import Link from "next/link";
+import { apiRequest } from "@/lib/api-client";
 
 interface NotificationChannelProps {
     title: string;
@@ -18,7 +19,9 @@ interface NotificationChannelProps {
 }
 
 export default function NotificationsSettingsPage() {
-    const { success } = useToast();
+    const { success, error } = useToast();
+    const [isLoading, setIsLoading] = React.useState(true);
+    const [isSaving, setIsSaving] = React.useState(false);
     const [emailEnabled, setEmailEnabled] = React.useState(true);
     const [smsEnabled, setSmsEnabled] = React.useState(false);
     const [pushEnabled, setPushEnabled] = React.useState(true);
@@ -28,6 +31,37 @@ export default function NotificationsSettingsPage() {
         { id: "NT-901", type: "SMS", recipient: "Staff", subject: "Emergency Meeting Notice", date: "2024-03-19 04:15 PM", status: "Sent" },
         { id: "NT-900", type: "Push", recipient: "Grade 10", subject: "Math Quiz Postponed", date: "2024-03-18 10:00 AM", status: "Failed" },
     ];
+
+    React.useEffect(() => {
+        const load = async () => {
+            try {
+                const payload = await apiRequest<{ emailEnabled?: boolean; smsEnabled?: boolean; pushEnabled?: boolean }>("/settings/notifications");
+                setEmailEnabled(Boolean(payload.emailEnabled));
+                setSmsEnabled(Boolean(payload.smsEnabled));
+                setPushEnabled(Boolean(payload.pushEnabled));
+            } catch (err) {
+                error(err instanceof Error ? err.message : "Unable to load notification settings.");
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        void load();
+    }, [error]);
+
+    const saveChannels = async (next: { emailEnabled: boolean; smsEnabled: boolean; pushEnabled: boolean }) => {
+        setIsSaving(true);
+        try {
+            await apiRequest("/settings/notifications", {
+                method: "PATCH",
+                body: JSON.stringify(next),
+            });
+        } catch (err) {
+            error(err instanceof Error ? err.message : "Unable to update notification settings.");
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     return (
         <DashboardLayout>
@@ -65,23 +99,39 @@ export default function NotificationsSettingsPage() {
                                 icon={<Mail size={18} />}
                                 description="Daily reports, fee invoices, and official newsletters."
                                 enabled={emailEnabled}
-                                onToggle={() => { setEmailEnabled(!emailEnabled); success(`Email notifications ${!emailEnabled ? "enabled" : "disabled"}`); }}
+                                onToggle={() => {
+                                    const next = !emailEnabled;
+                                    setEmailEnabled(next);
+                                    void saveChannels({ emailEnabled: next, smsEnabled, pushEnabled });
+                                    success(`Email notifications ${next ? "enabled" : "disabled"}`);
+                                }}
                             />
                             <ChannelToggle
                                 title="SMS Notifications"
                                 icon={<Smartphone size={18} />}
                                 description="Urgent alerts, OTPs, and short attendance updates."
                                 enabled={smsEnabled}
-                                onToggle={() => { setSmsEnabled(!smsEnabled); success(`SMS notifications ${!smsEnabled ? "enabled" : "disabled"}`); }}
+                                onToggle={() => {
+                                    const next = !smsEnabled;
+                                    setSmsEnabled(next);
+                                    void saveChannels({ emailEnabled, smsEnabled: next, pushEnabled });
+                                    success(`SMS notifications ${next ? "enabled" : "disabled"}`);
+                                }}
                             />
                             <ChannelToggle
                                 title="Push Notifications"
                                 icon={<Bell size={18} />}
                                 description="Live class reminders and instant notice board updates."
                                 enabled={pushEnabled}
-                                onToggle={() => { setPushEnabled(!pushEnabled); success(`Push notifications ${!pushEnabled ? "enabled" : "disabled"}`); }}
+                                onToggle={() => {
+                                    const next = !pushEnabled;
+                                    setPushEnabled(next);
+                                    void saveChannels({ emailEnabled, smsEnabled, pushEnabled: next });
+                                    success(`Push notifications ${next ? "enabled" : "disabled"}`);
+                                }}
                             />
                         </div>
+                        {isSaving && <p className="text-xs text-slate-500">Saving changes...</p>}
                     </div>
 
                     {/* Template Quick Edit */}
@@ -143,6 +193,7 @@ export default function NotificationsSettingsPage() {
                             },
                         ]}
                         data={history}
+                        loading={isLoading}
                     />
                 </div>
             </motion.div>

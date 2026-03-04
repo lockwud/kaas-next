@@ -8,8 +8,39 @@ import AuthLayout from "../../components/AuthLayout";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { motion, Variants } from "framer-motion";
+import { apiRequest } from "@/lib/api-client";
+import { extractSessionTokens, setRoleKey, setSessionTokens } from "@/lib/auth-session";
+import { useToast } from "@/hooks/useToast";
+
+type LoginResponse = {
+  token?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  onboardingRequired: boolean;
+  user: {
+    id: string;
+    email: string;
+    schoolId?: string;
+    branchId?: string;
+    role?: string;
+    isActive: boolean;
+  };
+};
+
+const formatRole = (role?: string): string => {
+  if (!role) {
+    return "General Manager";
+  }
+
+  return role
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+};
 
 export default function Login() {
+  const { error: toastError } = useToast();
   const router = useRouter();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -38,18 +69,36 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const token = `demo-${Date.now()}`;
+      const payload = await apiRequest<LoginResponse>("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
+      const tokens = extractSessionTokens(payload);
+      if (!tokens) {
+        throw new Error("Login response did not include a valid access token.");
+      }
+
       const fallbackName = email.split("@")[0] || "User";
-      localStorage.setItem("kaas_token", token);
-      localStorage.setItem("kaas_user_email", email);
+
+      setSessionTokens(tokens);
+      localStorage.setItem("kaas_user_email", payload.user.email);
       localStorage.setItem("kaas_user_name", fallbackName);
-      localStorage.setItem("kaas_user_role", "General Manager");
-      localStorage.setItem("kaas_school_id", "demo-school");
-      localStorage.setItem("kaas_school_name", "Kaas Montessori School");
+      localStorage.setItem("kaas_user_role", formatRole(payload.user.role));
+      setRoleKey(payload.user.role ?? "");
+      localStorage.setItem("kaas_school_id", payload.user.schoolId ?? "");
+      localStorage.setItem("kaas_branch_id", payload.user.branchId ?? "");
+      localStorage.setItem("kaas_school_name", "Kaas School");
+
+      if (payload.onboardingRequired) {
+        router.push("/Register");
+        return;
+      }
 
       router.push("/AdminDashboard");
-    } catch {
-      setErrorMessage("Unable to login right now.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to login right now.";
+      setErrorMessage(message);
+      toastError(message);
     } finally {
       setIsLoading(false);
     }

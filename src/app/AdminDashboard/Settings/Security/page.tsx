@@ -9,15 +9,82 @@ import { motion } from "framer-motion";
 import { ShieldCheck, Key, Smartphone, History, ChevronLeft, LogOut, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/useToast";
 import Link from "next/link";
+import { apiRequest } from "@/lib/api-client";
 
 export default function SecuritySettingsPage() {
-    const { success } = useToast();
+    const { success, error } = useToast();
     const [is2FAEnabled, setIs2FAEnabled] = React.useState(false);
+    const [isLoading, setIsLoading] = React.useState(true);
+    const [isSaving2FA, setIsSaving2FA] = React.useState(false);
+    const [isUpdatingPassword, setIsUpdatingPassword] = React.useState(false);
+    const [currentPassword, setCurrentPassword] = React.useState("");
+    const [newPassword, setNewPassword] = React.useState("");
+    const [confirmPassword, setConfirmPassword] = React.useState("");
+    const [sessions, setSessions] = React.useState<Array<{ id: string; device: string; ip: string; date: string; status: string }>>([]);
 
-    const sessions = [
-        { id: "S-1", device: "Chrome on Windows (Accra, GH)", ip: "154.160.20.11", date: "Currently Active", status: "online" },
-        { id: "S-2", device: "Safari on iPhone 13", ip: "154.160.20.14", date: "2024-03-20 09:45 AM", status: "offline" },
-    ];
+    React.useEffect(() => {
+        const load = async () => {
+            try {
+                const payload = await apiRequest<{
+                    settings?: { twoFactorRequired?: boolean };
+                    sessions?: Array<{ id: string; device: string; ip: string; date: string; status: string }>;
+                }>("/settings/security");
+                setIs2FAEnabled(Boolean(payload.settings?.twoFactorRequired));
+                setSessions(payload.sessions ?? []);
+            } catch (err) {
+                error(err instanceof Error ? err.message : "Unable to load security settings.");
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        void load();
+    }, [error]);
+
+    const handleToggle2FA = async () => {
+        const next = !is2FAEnabled;
+        setIs2FAEnabled(next);
+        setIsSaving2FA(true);
+        try {
+            await apiRequest("/settings/security", {
+                method: "PATCH",
+                body: JSON.stringify({ twoFactorRequired: next }),
+            });
+            success(`2FA ${next ? "enabled" : "disabled"} successfully.`);
+        } catch (err) {
+            setIs2FAEnabled(!next);
+            error(err instanceof Error ? err.message : "Unable to update 2FA setting.");
+        } finally {
+            setIsSaving2FA(false);
+        }
+    };
+
+    const handleUpdatePassword = async () => {
+        if (!currentPassword || !newPassword || !confirmPassword) {
+            error("All password fields are required.");
+            return;
+        }
+
+        setIsUpdatingPassword(true);
+        try {
+            await apiRequest("/settings/security/password", {
+                method: "POST",
+                body: JSON.stringify({
+                    currentPassword,
+                    newPassword,
+                    confirmPassword,
+                }),
+            });
+            setCurrentPassword("");
+            setNewPassword("");
+            setConfirmPassword("");
+            success("Password updated successfully.");
+        } catch (err) {
+            error(err instanceof Error ? err.message : "Unable to update password.");
+        } finally {
+            setIsUpdatingPassword(false);
+        }
+    };
 
     return (
         <DashboardLayout>
@@ -50,11 +117,17 @@ export default function SecuritySettingsPage() {
                             <Key size={18} className="text-blue-500" /> Password Management
                         </h3>
                         <div className="space-y-4">
-                            <Input label="Current Password" type="password" />
-                            <Input label="New Password" type="password" />
-                            <Input label="Confirm New Password" type="password" />
+                            <Input label="Current Password" type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
+                            <Input label="New Password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+                            <Input label="Confirm New Password" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
                             <div className="pt-4 border-t border-slate-100 flex justify-end">
-                                <Button className="bg-slate-900 text-white hover:bg-slate-800 h-10 px-6" onClick={() => success("Password updated successfully.")}>Update Password</Button>
+                                <Button
+                                    className="bg-slate-900 text-white hover:bg-slate-800 h-10 px-6"
+                                    onClick={handleUpdatePassword}
+                                    isLoading={isUpdatingPassword}
+                                >
+                                    Update Password
+                                </Button>
                             </div>
                         </div>
                     </div>
@@ -75,7 +148,8 @@ export default function SecuritySettingsPage() {
                                     </div>
                                 </div>
                                 <button
-                                    onClick={() => setIs2FAEnabled(!is2FAEnabled)}
+                                    onClick={handleToggle2FA}
+                                    disabled={isSaving2FA}
                                     className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${is2FAEnabled ? "bg-emerald-600" : "bg-slate-200"}`}
                                 >
                                     <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ${is2FAEnabled ? "translate-x-5" : "translate-x-0"}`} />
@@ -128,6 +202,7 @@ export default function SecuritySettingsPage() {
                             { header: "Last Login", accessor: "date", className: "text-slate-500 text-xs" },
                         ]}
                         data={sessions}
+                        loading={isLoading}
                         actions={() => <LogOut size={16} className="text-slate-300 cursor-pointer hover:text-red-500 transition-colors mx-auto" />}
                     />
                 </div>

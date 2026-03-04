@@ -5,11 +5,11 @@ import DashboardLayout from "../../../../components/DashboardLayout";
 import { Button } from "../../../../components/ui/Button";
 import { Table } from "../../../../components/ui/Table";
 import { Input } from "../../../../components/ui/Input";
-import { Select } from "../../../../components/ui/Select";
 import { motion } from "framer-motion";
 import { Calendar, Plus, CheckCircle2, AlertCircle, X, ChevronLeft } from "lucide-react";
 import { useToast } from "@/hooks/useToast";
 import Link from "next/link";
+import { apiRequest } from "@/lib/api-client";
 
 interface SessionRow {
     id: string;
@@ -20,26 +20,66 @@ interface SessionRow {
 }
 
 export default function AcademicYearPage() {
-    const { success } = useToast();
+    const { success, error } = useToast();
     const [isModalOpen, setIsModalOpen] = React.useState(false);
+    const [isLoading, setIsLoading] = React.useState(true);
+    const [isCreating, setIsCreating] = React.useState(false);
+    const [sessions, setSessions] = React.useState<SessionRow[]>([]);
 
     // Modal state
     const [newSession, setNewSession] = React.useState("");
     const [startDate, setStartDate] = React.useState("");
     const [endDate, setEndDate] = React.useState("");
 
-    const sessions: SessionRow[] = [
-        { id: "SESS-24", session: "2024/2025 Academic Year", startDate: "2024-09-01", endDate: "2025-07-31", status: "Active" },
-        { id: "SESS-23", session: "2023/2024 Academic Year", startDate: "2023-09-01", endDate: "2024-07-31", status: "Completed" },
-        { id: "SESS-25", session: "2025/2026 Academic Year", startDate: "2025-09-01", endDate: "2026-07-31", status: "Upcoming" },
-    ];
+    React.useEffect(() => {
+        const load = async () => {
+            try {
+                const payload = await apiRequest<SessionRow[]>("/settings/academic-year/sessions");
+                setSessions(payload);
+            } catch (err) {
+                error(err instanceof Error ? err.message : "Unable to load academic sessions.");
+            } finally {
+                setIsLoading(false);
+            }
+        };
 
-    const handleSubmit = (e: React.FormEvent) => {
+        void load();
+    }, [error]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        console.log("Creating session:", { newSession, startDate, endDate });
-        success(`Academic session "${newSession}" has been created.`);
-        setIsModalOpen(false);
+        setIsCreating(true);
+        try {
+            const created = await apiRequest<SessionRow>("/settings/academic-year/sessions", {
+                method: "POST",
+                body: JSON.stringify({ session: newSession, startDate, endDate }),
+            });
+            setSessions((current) => [created, ...current]);
+            success(`Academic session "${newSession}" has been created.`);
+            setIsModalOpen(false);
+            setNewSession("");
+            setStartDate("");
+            setEndDate("");
+        } catch (err) {
+            error(err instanceof Error ? err.message : "Unable to create session.");
+        } finally {
+            setIsCreating(false);
+        }
     };
+
+    const handleActivate = async (sessionId: string) => {
+        try {
+            const updated = await apiRequest<SessionRow[]>(`/settings/academic-year/sessions/${sessionId}/activate`, {
+                method: "POST",
+            });
+            setSessions(updated);
+            success("Academic session activated.");
+        } catch (err) {
+            error(err instanceof Error ? err.message : "Unable to activate session.");
+        }
+    };
+
+    const activeSession = sessions.find((session) => session.status === "Active");
 
     return (
         <DashboardLayout>
@@ -71,7 +111,7 @@ export default function AcademicYearPage() {
                         </div>
                         <div>
                             <p className="text-emerald-100 text-xs font-bold uppercase tracking-wider">Current Active Session</p>
-                            <h2 className="text-xl font-bold">2024/2025 Academic Year</h2>
+                            <h2 className="text-xl font-bold">{activeSession?.session ?? "No active session"}</h2>
                         </div>
                     </div>
                     <div className="hidden md:flex items-center gap-2 bg-white/10 px-3 py-1.5 rounded-lg border border-white/20">
@@ -100,10 +140,17 @@ export default function AcademicYearPage() {
                             },
                         ]}
                         data={sessions}
-                        actions={() => (
+                        loading={isLoading}
+                        actions={(row) => (
                             <div className="flex gap-2">
                                 <Button variant="ghost" className="h-8 px-2 text-xs text-slate-600">Edit</Button>
-                                <Button variant="ghost" className="h-8 px-2 text-xs text-emerald-600 font-bold">Activate</Button>
+                                <Button
+                                    variant="ghost"
+                                    className="h-8 px-2 text-xs text-emerald-600 font-bold"
+                                    onClick={() => handleActivate(row.id)}
+                                >
+                                    Activate
+                                </Button>
                             </div>
                         )}
                     />
@@ -138,7 +185,7 @@ export default function AcademicYearPage() {
                             </div>
                             <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
                                 <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-                                <Button type="submit" className="bg-slate-900 text-white hover:bg-slate-800">Create Session</Button>
+                                <Button type="submit" className="bg-slate-900 text-white hover:bg-slate-800" isLoading={isCreating}>Create Session</Button>
                             </div>
                         </form>
                     </motion.div>
