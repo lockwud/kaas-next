@@ -8,14 +8,57 @@ import { motion } from "framer-motion";
 import { Database, Download, Cloud, History, ChevronLeft, RefreshCw, FileText, Settings2 } from "lucide-react";
 import { useToast } from "@/hooks/useToast";
 import Link from "next/link";
+import { apiRequest } from "@/lib/api-client";
 
 export default function BackupSettingsPage() {
-    const { success } = useToast();
-    const backups = [
-        { id: "B-101", type: "Full Database", size: "45.2 MB", date: "2024-03-20 03:00 AM", status: "Success" },
-        { id: "B-100", type: "Media & Documents", size: "128.8 MB", date: "2024-03-19 11:30 PM", status: "Success" },
-        { id: "B-099", type: "Incremental Sync", size: "1.2 MB", date: "2024-03-19 06:00 PM", status: "Success" },
-    ];
+    const { success, error } = useToast();
+    const [isLoading, setIsLoading] = React.useState(true);
+    const [isRunningBackup, setIsRunningBackup] = React.useState(false);
+    const [backupConfig, setBackupConfig] = React.useState({
+        frequency: "daily",
+        retentionDays: 30,
+        backupTime: "03:00",
+    });
+    const [backups, setBackups] = React.useState<Array<{ id: string; type: string; size: string; date: string; status: string }>>([]);
+
+    React.useEffect(() => {
+        const load = async () => {
+            try {
+                const payload = await apiRequest<{
+                    settings?: { frequency?: string; retentionDays?: number; backupTime?: string };
+                    logs?: Array<{ id: string; type: string; size: string; date: string; status: string }>;
+                }>("/settings/backup");
+                setBackupConfig({
+                    frequency: payload.settings?.frequency ?? "daily",
+                    retentionDays: payload.settings?.retentionDays ?? 30,
+                    backupTime: payload.settings?.backupTime ?? "03:00",
+                });
+                setBackups(payload.logs ?? []);
+            } catch (err) {
+                error(err instanceof Error ? err.message : "Unable to load backup settings.");
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        void load();
+    }, [error]);
+
+    const runBackup = async () => {
+        setIsRunningBackup(true);
+        try {
+            const created = await apiRequest<{ id: string; type: string; size: string; date: string; status: string }>(
+                "/settings/backup/run",
+                { method: "POST" },
+            );
+            setBackups((current) => [created, ...current]);
+            success("Backup started successfully.");
+        } catch (err) {
+            error(err instanceof Error ? err.message : "Unable to run manual backup.");
+        } finally {
+            setIsRunningBackup(false);
+        }
+    };
 
     return (
         <DashboardLayout>
@@ -43,7 +86,7 @@ export default function BackupSettingsPage() {
                         <Button variant="outline" className="border-slate-200 text-slate-600 bg-white">
                             <Cloud size={16} className="mr-2" /> Storage Settings
                         </Button>
-                        <Button className="bg-slate-900 text-white hover:bg-slate-800" onClick={() => success("Backup started successfully.")}>
+                        <Button className="bg-slate-900 text-white hover:bg-slate-800" onClick={runBackup} isLoading={isRunningBackup}>
                             <RefreshCw size={16} className="mr-2" /> Run Manual Backup
                         </Button>
                     </div>
@@ -60,14 +103,14 @@ export default function BackupSettingsPage() {
                                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
                                     <div className="flex items-center justify-between">
                                         <div className="text-xs font-bold text-slate-600 uppercase">Backup Frequency</div>
-                                        <div className="text-xs font-bold text-emerald-600">DAILY</div>
+                                        <div className="text-xs font-bold text-emerald-600">{backupConfig.frequency.toUpperCase()}</div>
                                     </div>
-                                    <p className="text-[10px] text-slate-400 mt-1 italic">Every day at 03:00 AM</p>
+                                    <p className="text-[10px] text-slate-400 mt-1 italic">At {backupConfig.backupTime}</p>
                                 </div>
                                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
                                     <div className="flex items-center justify-between">
                                         <div className="text-xs font-bold text-slate-600 uppercase">Retention Period</div>
-                                        <div className="text-xs font-bold text-emerald-600">30 DAYS</div>
+                                        <div className="text-xs font-bold text-emerald-600">{backupConfig.retentionDays} DAYS</div>
                                     </div>
                                     <p className="text-[10px] text-slate-400 mt-1 italic">Older backups are auto-purged.</p>
                                 </div>
@@ -119,6 +162,7 @@ export default function BackupSettingsPage() {
                             },
                         ]}
                         data={backups}
+                        loading={isLoading}
                         actions={() => <Download size={16} className="text-slate-300 cursor-pointer hover:text-emerald-600 transition-colors mx-auto" />}
                     />
                 </div>

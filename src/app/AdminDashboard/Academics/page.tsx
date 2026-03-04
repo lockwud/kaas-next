@@ -10,11 +10,10 @@ import { Select } from "../../../components/ui/Select";
 import { motion, Variants } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { BarChart3, BookOpen, BookOpenText, Calendar, CalendarCheck, CalendarDays, ClipboardList, Clock, Download, FileSpreadsheet, FileText, GraduationCap, Layers, Megaphone, Save, School, Search, Sparkles, Upload, UserPen, UserRoundPlus, UsersRound, Video, X } from "lucide-react";
-import { createClassRecord, hasDuplicateClass, loadClasses, saveClasses } from "../../../lib/classes-storage";
-import { createStudentDirectoryRecord, loadStudentsDirectory, saveStudentsDirectory } from "../../../lib/students-storage";
-import { assessments as seededAssessments, students, users } from "../../../lib/school-data";
-import { StudentDirectoryRecord } from "../../../types/school";
+import { SchoolClass } from "../../../types/school";
 import { useToast } from "@/hooks/useToast";
+import { ApiRequestError, apiRequest } from "@/lib/api-client";
+import { API_ENDPOINTS } from "@/lib/api-endpoints";
 
 const normalize = (value: string) => value.trim().toLowerCase();
 const ACADEMIC_YEAR_START_MONTH = 7; // August
@@ -90,6 +89,55 @@ interface AssessmentStoredRecord {
   savedAt: string;
 }
 
+interface ClassApi {
+  id: string;
+  className?: string;
+  name?: string;
+  section?: string;
+  schoolId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface StudentApi {
+  id: string;
+  fullName?: string;
+  name?: string;
+  className?: string;
+  section?: string;
+}
+
+interface SubjectApi {
+  id: string;
+  name?: string;
+  title?: string;
+}
+
+interface UserApi {
+  id: string;
+  fullName: string;
+  role: string;
+}
+
+interface DirectoryLoadOptions {
+  classes?: boolean;
+  students?: boolean;
+  users?: boolean;
+  subjects?: boolean;
+}
+
+const mapClassApi = (item: ClassApi): SchoolClass => {
+  const now = new Date().toISOString();
+  return {
+    id: item.id,
+    schoolId: item.schoolId ?? "school",
+    className: item.className ?? item.name ?? "Unnamed Class",
+    section: item.section ?? "",
+    createdAt: item.createdAt ?? now,
+    updatedAt: item.updatedAt ?? now,
+  };
+};
+
 const toAssessmentClassKey = (className: string, section: string) => `${normalize(className)}|${normalize(section)}`;
 
 const toAssessmentClassLabel = (className: string, section: string) => `${className} ${section}`.trim();
@@ -100,10 +148,12 @@ const toAssessmentTotal = (entry: AssessmentEntryRow) =>
   (Math.max(0, Math.min(ASSESSMENT_MAX_EXAM_INPUT, entry.exam)) * ASSESSMENT_EXAM_WEIGHT_MAX) / ASSESSMENT_MAX_EXAM_INPUT;
 
 export default function AcademicsDashboard() {
-  const { success, info } = useToast();
+  const { success, info, error } = useToast();
   const router = useRouter();
+  const errorRef = React.useRef(error);
 
   const [isClassModalOpen, setIsClassModalOpen] = React.useState(false);
+  const [isSubjectModalOpen, setIsSubjectModalOpen] = React.useState(false);
   const [isStudentModalOpen, setIsStudentModalOpen] = React.useState(false);
   const [isUniversalModalOpen, setIsUniversalModalOpen] = React.useState(false);
   const [activeModalTitle, setActiveModalTitle] = React.useState("");
@@ -117,6 +167,16 @@ export default function AcademicsDashboard() {
   const [teacherAssignmentMode, setTeacherAssignmentMode] = React.useState<"now" | "later">("later");
   const [teacherId, setTeacherId] = React.useState("");
   const [assignedClassStudentIds, setAssignedClassStudentIds] = React.useState<string[]>([]);
+  const [subjectName, setSubjectName] = React.useState("");
+  const [subjectCode, setSubjectCode] = React.useState("");
+  const [subjectCategory, setSubjectCategory] = React.useState<"Core" | "Elective">("Core");
+  const [subjectStatus, setSubjectStatus] = React.useState<"Active" | "Inactive">("Active");
+  const [subjectAssignmentMode, setSubjectAssignmentMode] = React.useState<"all" | "specific">("all");
+  const [subjectClassId, setSubjectClassId] = React.useState("");
+  const [subjectTeacherAssignmentMode, setSubjectTeacherAssignmentMode] = React.useState<"later" | "now">("later");
+  const [subjectTeacherId, setSubjectTeacherId] = React.useState("");
+  const [subjectDescription, setSubjectDescription] = React.useState("");
+  const [subjectErrorMessage, setSubjectErrorMessage] = React.useState("");
 
   const [studentStep, setStudentStep] = React.useState<StudentStep>("profile");
   const [studentRegistrationMode, setStudentRegistrationMode] = React.useState<StudentRegistrationMode>("single");
@@ -144,7 +204,14 @@ export default function AcademicsDashboard() {
   const [errorMessage, setErrorMessage] = React.useState("");
   const [studentErrorMessage, setStudentErrorMessage] = React.useState("");
 
-  const [classDirectory, setClassDirectory] = React.useState(loadClasses());
+  const [classDirectory, setClassDirectory] = React.useState<SchoolClass[]>([]);
+  const [managedStudents, setManagedStudents] = React.useState<AssessmentStudentOption[]>([]);
+  const [managedUsers, setManagedUsers] = React.useState<UserApi[]>([]);
+  const [managedSubjects, setManagedSubjects] = React.useState<SubjectApi[]>([]);
+
+  React.useEffect(() => {
+    errorRef.current = error;
+  }, [error]);
 
   const cards = [
     { title: "Assessments", path: "/AdminDashboard/Academics/Assessments", icon: <ClipboardList size={18} />, description: "Build and manage term assessments", accent: "from-blue-400 to-blue-600" },
@@ -163,12 +230,23 @@ export default function AcademicsDashboard() {
     { title: "Live Classes", path: "/AdminDashboard/Academics/LiveClasses", icon: <Video size={18} />, description: "Host virtual classes (Pro)", accent: "from-purple-400 to-violet-700" },
   ];
 
-  const classTeachers = React.useMemo(() => users.filter((user) => user.role === "class_teacher"), []);
+  const classTeachers = React.useMemo(
+    () => managedUsers.filter((user) => user.role.toLowerCase() === "class_teacher"),
+    [managedUsers],
+  );
+  const subjectTeachers = React.useMemo(
+    () =>
+      managedUsers.filter((user) => {
+        const role = user.role.toLowerCase();
+        return role === "subject_teacher" || role === "class_teacher";
+      }),
+    [managedUsers],
+  );
 
   const classSectionMap = React.useMemo(() => {
     const map = new Map<string, Set<string>>();
 
-    students.forEach((student) => {
+    managedStudents.forEach((student) => {
       const key = student.className.trim();
       const sections = map.get(key) ?? new Set<string>();
       sections.add(student.section.trim());
@@ -176,7 +254,7 @@ export default function AcademicsDashboard() {
     });
 
     return map;
-  }, []);
+  }, [managedStudents]);
 
   const groupClassOptions = React.useMemo(
     () => Array.from(classSectionMap.keys()).map((name) => ({ value: name, label: name })),
@@ -219,8 +297,51 @@ export default function AcademicsDashboard() {
     },
   };
 
-  const refreshClassDirectory = React.useCallback(() => {
-    setClassDirectory(loadClasses());
+  const loadDirectoryData = React.useCallback(async (options?: DirectoryLoadOptions) => {
+    const {
+      classes: shouldLoadClasses = false,
+      students: shouldLoadStudents = false,
+      users: shouldLoadUsers = false,
+      subjects: shouldLoadSubjects = false,
+    } = options ?? {};
+
+    if (!shouldLoadClasses && !shouldLoadStudents && !shouldLoadUsers && !shouldLoadSubjects) {
+      return;
+    }
+
+    try {
+      const [classes, studentsPayload, usersPayload, subjectsPayload] = await Promise.all([
+        shouldLoadClasses ? apiRequest<ClassApi[]>(API_ENDPOINTS.classes) : Promise.resolve(null),
+        shouldLoadStudents ? apiRequest<StudentApi[]>(API_ENDPOINTS.students) : Promise.resolve(null),
+        shouldLoadUsers ? apiRequest<UserApi[]>(API_ENDPOINTS.usersManagement) : Promise.resolve(null),
+        shouldLoadSubjects ? apiRequest<SubjectApi[]>(API_ENDPOINTS.subjects) : Promise.resolve(null),
+      ]);
+
+      if (classes) {
+        setClassDirectory(classes.map(mapClassApi));
+      }
+
+      if (studentsPayload) {
+        setManagedStudents(
+          studentsPayload.map((student) => ({
+            id: student.id,
+            fullName: student.fullName ?? student.name ?? "Unnamed Student",
+            className: student.className ?? "",
+            section: student.section ?? "",
+          })),
+        );
+      }
+
+      if (usersPayload) {
+        setManagedUsers(usersPayload);
+      }
+
+      if (subjectsPayload) {
+        setManagedSubjects(subjectsPayload);
+      }
+    } catch (err) {
+      errorRef.current(err instanceof Error ? err.message : "Unable to load academics records.");
+    }
   }, []);
 
   const closeClassModal = () => {
@@ -238,6 +359,7 @@ export default function AcademicsDashboard() {
   };
 
   const openClassModal = () => {
+    void loadDirectoryData({ classes: true, students: true, users: true });
     setIsClassModalOpen(true);
     setErrorMessage("");
   };
@@ -268,9 +390,29 @@ export default function AcademicsDashboard() {
   };
 
   const openStudentModal = () => {
-    refreshClassDirectory();
+    void loadDirectoryData({ classes: true });
     setIsStudentModalOpen(true);
     setStudentErrorMessage("");
+  };
+
+  const closeSubjectModal = () => {
+    setIsSubjectModalOpen(false);
+    setSubjectName("");
+    setSubjectCode("");
+    setSubjectCategory("Core");
+    setSubjectStatus("Active");
+    setSubjectAssignmentMode("all");
+    setSubjectClassId("");
+    setSubjectTeacherAssignmentMode("later");
+    setSubjectTeacherId("");
+    setSubjectDescription("");
+    setSubjectErrorMessage("");
+  };
+
+  const openSubjectModal = () => {
+    void loadDirectoryData({ classes: true, users: true });
+    setIsSubjectModalOpen(true);
+    setSubjectErrorMessage("");
   };
 
   const toggleClassStudentAssignment = (studentId: string) => {
@@ -326,7 +468,13 @@ export default function AcademicsDashboard() {
       return;
     }
 
+    if (cardTitle === "Subjects") {
+      openSubjectModal();
+      return;
+    }
+
     // Open universal modal for other categories
+    void loadDirectoryData({ classes: true, students: true, subjects: true });
     setActiveModalTitle(cardTitle);
     setGenericTitle("");
     setGenericDescription("");
@@ -356,30 +504,8 @@ export default function AcademicsDashboard() {
   };
 
   React.useEffect(() => {
-    const directoryStudents = loadStudentsDirectory()
-      .map((student: StudentDirectoryRecord) => {
-        if (student.classAssignmentMode !== "now" || !student.className || !student.section) {
-          return null;
-        }
-
-        return {
-          id: student.id,
-          fullName: student.fullName,
-          className: student.className,
-          section: student.section,
-        };
-      })
-      .filter((student): student is AssessmentStudentOption => student !== null);
-
-    const seededStudents: AssessmentStudentOption[] = students.map((student) => ({
-      id: student.id,
-      fullName: student.fullName,
-      className: student.className,
-      section: student.section,
-    }));
-
     const studentMap = new Map<string, AssessmentStudentOption>();
-    [...directoryStudents, ...seededStudents].forEach((student) => {
+    managedStudents.forEach((student) => {
       if (!studentMap.has(student.id)) {
         studentMap.set(student.id, student);
       }
@@ -417,12 +543,10 @@ export default function AcademicsDashboard() {
     );
 
     setAssessmentClassOptions(sortedClassOptions);
-  }, [classDirectory]);
+  }, [classDirectory, managedStudents]);
 
-  const createClass = (event: React.FormEvent<HTMLFormElement>) => {
+  const createClass = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
-    const existing = loadClasses();
 
     let finalClassName = "";
     let finalSection = "";
@@ -457,7 +581,12 @@ export default function AcademicsDashboard() {
       }
     }
 
-    if (hasDuplicateClass(existing, finalClassName, finalSection)) {
+    const hasDuplicate = classDirectory.some(
+      (item) =>
+        normalize(item.className) === normalize(finalClassName) &&
+        normalize(item.section) === normalize(finalSection),
+    );
+    if (hasDuplicate) {
       setErrorMessage("Class and section already exist.");
       return;
     }
@@ -468,23 +597,30 @@ export default function AcademicsDashboard() {
     }
 
     const assignedTeacher = classTeachers.find((teacher) => teacher.id === teacherId);
-    const next = [
-      createClassRecord(finalClassName, finalSection, {
-        classTeacherId: teacherAssignmentMode === "now" ? assignedTeacher?.id : undefined,
-        classTeacherName: teacherAssignmentMode === "now" ? assignedTeacher?.fullName : undefined,
-        assignedStudentIds: assignedClassStudentIds,
-        sourceSections,
-      }),
-      ...existing,
-    ];
-
-    saveClasses(next);
-    refreshClassDirectory();
-    success(`Class "${finalClassName}" has been created successfully.`);
-    closeClassModal();
+    try {
+      await apiRequest<ClassApi>(API_ENDPOINTS.classes, {
+        method: "POST",
+        body: JSON.stringify({
+          className: finalClassName,
+          section: finalSection,
+          classTeacherId: teacherAssignmentMode === "now" ? assignedTeacher?.id : undefined,
+          assignedStudentIds: assignedClassStudentIds,
+          sourceSections,
+        }),
+      });
+      await loadDirectoryData({ classes: true, students: true });
+      success(`Class "${finalClassName}" has been created successfully.`);
+      closeClassModal();
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.status === 403) {
+        setErrorMessage("Forbidden: server denied class creation for this account.");
+        return;
+      }
+      setErrorMessage(err instanceof Error ? err.message : "Unable to create class.");
+    }
   };
 
-  const createStudent = (event: React.FormEvent<HTMLFormElement>) => {
+  const createStudent = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const selectedAcademicYear =
       academicYearMode === "configured" ? configuredAcademicYear : customAcademicYear.trim();
@@ -533,46 +669,92 @@ export default function AcademicsDashboard() {
 
     const selectedClass = classDirectory.find((item) => item.id === selectedClassId);
 
-    const existing = loadStudentsDirectory();
     const namesToCreate = isBulkMode ? parsedBulkNames : [trimmedName];
-    const fallbackGuardianName = guardianName.trim() || "Not Provided";
-    const fallbackGuardianRelationship = guardianRelationship.trim() || "Guardian";
-    const fallbackGuardianContact = guardianContact.trim() || "Not Provided";
-    const fallbackAddress = houseAddress.trim() || "Not Provided";
-    const fallbackEmergencyName = emergencyContactName.trim() || "Not Provided";
-    const fallbackEmergencyRelationship = emergencyRelationship.trim() || "Guardian";
-    const fallbackEmergencyPhone = emergencyPhone.trim() || "Not Provided";
+    try {
+      await Promise.all(
+        namesToCreate.map((fullName) =>
+          apiRequest<StudentApi>(API_ENDPOINTS.students, {
+            method: "POST",
+            body: JSON.stringify({
+              fullName,
+              className: studentClassAssignmentMode === "now" ? selectedClass?.className : undefined,
+              section: studentClassAssignmentMode === "now" ? selectedClass?.section : undefined,
+              classId: studentClassAssignmentMode === "now" ? selectedClassId : undefined,
+              admissionDate,
+              academicYear: selectedAcademicYear,
+              guardianName: guardianName.trim() || "Not Provided",
+              guardianRelationship: guardianRelationship.trim() || "Guardian",
+              guardianPrimaryContact: guardianContact.trim() || "Not Provided",
+              guardianSecondaryContact: guardianOptionalContact,
+              houseAddress: houseAddress.trim() || "Not Provided",
+              emergencyContactName: emergencyContactName.trim() || "Not Provided",
+              emergencyContactRelationship: emergencyRelationship.trim() || "Guardian",
+              emergencyContactPhone: emergencyPhone.trim() || "Not Provided",
+              previousAcademicHistory,
+              healthRecords,
+            }),
+          }),
+        ),
+      );
 
-    const createdRecords = namesToCreate.map((fullName) =>
-      createStudentDirectoryRecord({
-        fullName,
-        classAssignmentMode: studentClassAssignmentMode,
-        className: selectedClass?.className,
-        section: selectedClass?.section,
-        admissionDate,
-        academicYear: selectedAcademicYear,
-        guardianName: fallbackGuardianName,
-        guardianRelationship: fallbackGuardianRelationship,
-        guardianPrimaryContact: fallbackGuardianContact,
-        guardianSecondaryContact: guardianOptionalContact,
-        houseAddress: fallbackAddress,
-        emergencyContactName: fallbackEmergencyName,
-        emergencyContactRelationship: fallbackEmergencyRelationship,
-        emergencyContactPhone: fallbackEmergencyPhone,
-        previousAcademicHistory,
-        healthRecords,
-      }),
-    );
-
-    const next = [...createdRecords, ...existing];
-
-    saveStudentsDirectory(next);
-    if (isBulkMode) {
-      success(`${createdRecords.length} students have been registered successfully.`);
-    } else {
-      success(`Student "${trimmedName}" has been registered successfully.`);
+      await loadDirectoryData({ classes: true, students: true });
+      if (isBulkMode) {
+        success(`${namesToCreate.length} students have been registered successfully.`);
+      } else {
+        success(`Student "${trimmedName}" has been registered successfully.`);
+      }
+      closeStudentModal();
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.status === 403) {
+        setStudentErrorMessage("Forbidden: server denied student registration for this account.");
+        return;
+      }
+      setStudentErrorMessage(err instanceof Error ? err.message : "Unable to register student.");
+      return;
     }
-    closeStudentModal();
+  };
+
+  const createSubject = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!subjectName.trim() || !subjectCode.trim()) {
+      setSubjectErrorMessage("Subject name and code are required.");
+      return;
+    }
+
+    if (subjectAssignmentMode === "specific" && !subjectClassId) {
+      setSubjectErrorMessage("Select a class scope or switch to all classes.");
+      return;
+    }
+
+    if (subjectTeacherAssignmentMode === "now" && !subjectTeacherId) {
+      setSubjectErrorMessage("Select a subject teacher or assign later.");
+      return;
+    }
+
+    try {
+      await apiRequest<SubjectApi>(API_ENDPOINTS.subjects, {
+        method: "POST",
+        body: JSON.stringify({
+          name: subjectName.trim(),
+          code: subjectCode.trim(),
+          category: subjectCategory,
+          status: subjectStatus,
+          classId: subjectAssignmentMode === "specific" ? subjectClassId : undefined,
+          teacherId: subjectTeacherAssignmentMode === "now" ? subjectTeacherId : undefined,
+          description: subjectDescription.trim() || undefined,
+        }),
+      });
+      await loadDirectoryData({ subjects: true });
+      success(`Subject "${subjectName.trim()}" has been created successfully.`);
+      closeSubjectModal();
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.status === 403) {
+        setSubjectErrorMessage("Forbidden: server denied subject creation for this account.");
+        return;
+      }
+      setSubjectErrorMessage(err instanceof Error ? err.message : "Unable to create subject.");
+    }
   };
 
   const isAssessmentModal = activeModalTitle === "Assessments";
@@ -608,13 +790,13 @@ export default function AcademicsDashboard() {
   const assessmentSubjectOptions = React.useMemo(() => {
     const subjects = Array.from(
       new Set([
-        ...seededAssessments.map((assessment) => assessment.subject),
+        ...managedSubjects.map((subject) => subject.name ?? subject.title ?? ""),
         genericSubject.trim(),
       ].filter(Boolean)),
     ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 
     return subjects.map((subject) => ({ value: subject, label: subject }));
-  }, [genericSubject]);
+  }, [genericSubject, managedSubjects]);
 
   const totalAssessmentPages = Math.max(1, Math.ceil(filteredAssessmentEntries.length / assessmentPageSize));
   const safeAssessmentPage = Math.min(Math.max(1, assessmentPage), totalAssessmentPages);
@@ -915,7 +1097,7 @@ export default function AcademicsDashboard() {
                 </div>
                 <p className="mb-3 text-xs text-slate-500">Select students to enroll in this new class.</p>
                 <div className="grid max-h-32 grid-cols-1 gap-2 overflow-auto rounded-lg border border-slate-100 p-2 sm:grid-cols-2">
-                  {students.map((student) => {
+                  {managedStudents.map((student) => {
                     const checked = assignedClassStudentIds.includes(student.id);
                     return (
                       <label key={student.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-xs text-slate-700 hover:bg-slate-50">
@@ -983,6 +1165,175 @@ export default function AcademicsDashboard() {
                 </Button>
                 <Button type="submit" className="h-10 px-4">
                   Save Class
+                </Button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {isSubjectModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Create Subject</h3>
+                <p className="text-xs text-slate-500">Add a subject with scope, category, teacher assignment, and status.</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeSubjectModal}
+                aria-label="Close modal"
+                className="rounded-full p-1 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={createSubject} className="space-y-5 px-6 py-5">
+              <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
+                <button
+                  type="button"
+                  onClick={() => setSubjectCategory("Core")}
+                  className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${subjectCategory === "Core" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                    }`}
+                >
+                  <Sparkles size={14} />
+                  Core Subject
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubjectCategory("Elective")}
+                  className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${subjectCategory === "Elective" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                    }`}
+                >
+                  <Layers size={14} />
+                  Elective Subject
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Input
+                  label="Subject Name"
+                  value={subjectName}
+                  onChange={(event) => setSubjectName(event.target.value)}
+                  placeholder="Mathematics"
+                  required
+                />
+                <Input
+                  label="Subject Code"
+                  value={subjectCode}
+                  onChange={(event) => setSubjectCode(event.target.value)}
+                  placeholder="MTH-101"
+                  required
+                />
+              </div>
+
+              <div className="rounded-xl border border-slate-200 p-4">
+                <div className="mb-3 flex items-center gap-2 text-slate-800">
+                  <UsersRound size={16} />
+                  <p className="text-sm font-semibold">Class Scope</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setSubjectAssignmentMode("all")}
+                    className={`rounded-md px-3 py-2 text-xs font-medium ${subjectAssignmentMode === "all" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                      }`}
+                  >
+                    All Classes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSubjectAssignmentMode("specific")}
+                    className={`rounded-md px-3 py-2 text-xs font-medium ${subjectAssignmentMode === "specific" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                      }`}
+                  >
+                    Specific Class
+                  </button>
+                </div>
+
+                {subjectAssignmentMode === "specific" && (
+                  <div className="mt-3">
+                    <Select
+                      label="Class"
+                      value={subjectClassId}
+                      onChange={(event) => setSubjectClassId(event.target.value)}
+                      options={classOptions}
+                      required
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-slate-200 p-4">
+                <div className="mb-3 flex items-center gap-2 text-slate-800">
+                  <UserRoundPlus size={16} />
+                  <p className="text-sm font-semibold">Subject Teacher Assignment</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setSubjectTeacherAssignmentMode("later")}
+                    className={`rounded-md px-3 py-2 text-xs font-medium ${subjectTeacherAssignmentMode === "later" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                      }`}
+                  >
+                    Assign Later
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSubjectTeacherAssignmentMode("now")}
+                    className={`rounded-md px-3 py-2 text-xs font-medium ${subjectTeacherAssignmentMode === "now" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                      }`}
+                  >
+                    Assign Now
+                  </button>
+                </div>
+
+                {subjectTeacherAssignmentMode === "now" && (
+                  <div className="mt-3">
+                    <Select
+                      label="Subject Teacher"
+                      value={subjectTeacherId}
+                      onChange={(event) => setSubjectTeacherId(event.target.value)}
+                      options={subjectTeachers.map((teacher) => ({ value: teacher.id, label: teacher.fullName }))}
+                      required
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Select
+                  label="Status"
+                  value={subjectStatus}
+                  onChange={(event) => setSubjectStatus(event.target.value as "Active" | "Inactive")}
+                  options={[
+                    { value: "Active", label: "Active" },
+                    { value: "Inactive", label: "Inactive" },
+                  ]}
+                />
+                <Input
+                  label="Description (Optional)"
+                  value={subjectDescription}
+                  onChange={(event) => setSubjectDescription(event.target.value)}
+                  placeholder="Core numeracy and problem-solving skills."
+                />
+              </div>
+
+              {subjectErrorMessage && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600">{subjectErrorMessage}</p>}
+
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                <Button type="button" variant="outline" className="h-10 px-4" onClick={closeSubjectModal}>
+                  Cancel
+                </Button>
+                <Button type="submit" className="h-10 px-4">
+                  Save Subject
                 </Button>
               </div>
             </form>
@@ -1246,7 +1597,7 @@ export default function AcademicsDashboard() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-6xl max-h-[98vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
+            className="w-full max-w-5xl max-h-[98vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
           >
             <div className="flex items-center justify-between border-b border-slate-200 bg-[#0F172A] px-6 py-3">
               <div>
@@ -1466,15 +1817,14 @@ export default function AcademicsDashboard() {
                         pageSizeOptions={[20, 50, 100]}
                       />
                     </div>
-                  </div>
-
-                  <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
-                    <Button type="button" variant="outline" className="h-9 px-4 text-xs" onClick={() => setIsUniversalModalOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button type="submit" className="h-9 bg-[#1D4ED8] px-4 text-xs hover:bg-[#1E40AF]">
-                      Save Assessment
-                    </Button>
+                    <div className="flex justify-end gap-2 border-t border-slate-200 bg-white px-3 py-3">
+                      <Button type="button" variant="outline" className="h-9 px-4 text-xs" onClick={() => setIsUniversalModalOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button type="submit" className="h-9 bg-[#1D4ED8] px-4 text-xs hover:bg-[#1E40AF]">
+                        Save Assessment
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}

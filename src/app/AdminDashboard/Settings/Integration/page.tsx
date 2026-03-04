@@ -8,23 +8,109 @@ import { motion } from "framer-motion";
 import { Puzzle, MessageSquare, Phone, CreditCard, ChevronLeft, Check, ExternalLink, Settings2, X } from "lucide-react";
 import { useToast } from "@/hooks/useToast";
 import Link from "next/link";
+import { apiRequest } from "@/lib/api-client";
 
 interface IntegrationCardProps {
     title: string;
     description: string;
-    icon: React.ReactNode;
+    icon: React.ReactElement<{ size?: number }>;
     status: "connected" | "disconnected";
     onConfigure: () => void;
 }
 
+type IntegrationService = {
+    key: string;
+    name: string;
+    enabled: boolean;
+    status: "connected" | "disconnected";
+    config?: Record<string, unknown>;
+};
+
 export default function IntegrationSettingsPage() {
-    const { success } = useToast();
+    const { success, error } = useToast();
     const [isModalOpen, setIsModalOpen] = React.useState(false);
     const [activeService, setActiveService] = React.useState("");
+    const [isLoading, setIsLoading] = React.useState(true);
+    const [isSaving, setIsSaving] = React.useState(false);
+    const [services, setServices] = React.useState<IntegrationService[]>([]);
+    const [apiSecret, setApiSecret] = React.useState("");
+    const [webhookUrl, setWebhookUrl] = React.useState("");
 
     const handleConfigure = (service: string) => {
         setActiveService(service);
         setIsModalOpen(true);
+    };
+
+    React.useEffect(() => {
+        const load = async () => {
+            try {
+                const payload = await apiRequest<{ services?: IntegrationService[] }>("/settings/integrations");
+                setServices(payload.services ?? []);
+            } catch (err) {
+                error(err instanceof Error ? err.message : "Unable to load integrations.");
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        void load();
+    }, [error]);
+
+    const serviceConfigMap = React.useMemo<Record<string, { description: string; icon: React.ReactElement<{ size?: number }> }>>(
+        () => ({
+            whatsapp: {
+                description: "Send automated attendance and fee alerts directly to parents via WhatsApp.",
+                icon: <MessageSquare className="text-emerald-500" />,
+            },
+            bulk_sms: {
+                description: "Reliable SMS notifications for emergencies, holidays, and announcements.",
+                icon: <Phone className="text-blue-500" />,
+            },
+            payments: {
+                description: "Allow parents to pay school fees online using Mobile Money or Card.",
+                icon: <CreditCard className="text-indigo-500" />,
+            },
+            google_drive: {
+                description: "Automatic backups of student documents and academic records.",
+                icon: <Puzzle className="text-amber-500" />,
+            },
+        }),
+        [],
+    );
+
+    const saveConfig = async (event: React.MouseEvent<HTMLButtonElement>) => {
+        event.preventDefault();
+        const nextServices = services.map((service) =>
+            service.name === activeService
+                ? {
+                    ...service,
+                    status: "connected" as const,
+                    enabled: true,
+                    config: {
+                        ...(service.config ?? {}),
+                        apiSecret,
+                        webhookUrl,
+                    },
+                }
+                : service,
+        );
+
+        setIsSaving(true);
+        try {
+            await apiRequest("/settings/integrations", {
+                method: "PATCH",
+                body: JSON.stringify({ services: nextServices }),
+            });
+            setServices(nextServices);
+            success(`${activeService} configuration saved.`);
+            setIsModalOpen(false);
+            setApiSecret("");
+            setWebhookUrl("");
+        } catch (err) {
+            error(err instanceof Error ? err.message : "Unable to save integration configuration.");
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     return (
@@ -45,34 +131,19 @@ export default function IntegrationSettingsPage() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <IntegrationCard
-                        title="WhatsApp Business"
-                        description="Send automated attendance and fee alerts directly to parents via WhatsApp."
-                        icon={<MessageSquare className="text-emerald-500" />}
-                        status="connected"
-                        onConfigure={() => handleConfigure("WhatsApp")}
-                    />
-                    <IntegrationCard
-                        title="Bulk SMS Gateway"
-                        description="Reliable SMS notifications for emergencies, holidays, and announcements."
-                        icon={<Phone className="text-blue-500" />}
-                        status="disconnected"
-                        onConfigure={() => handleConfigure("Bulk SMS")}
-                    />
-                    <IntegrationCard
-                        title="Paystack / Momo"
-                        description="Allow parents to pay school fees online using Mobile Money or Card."
-                        icon={<CreditCard className="text-indigo-500" />}
-                        status="disconnected"
-                        onConfigure={() => handleConfigure("Payments")}
-                    />
-                    <IntegrationCard
-                        title="Google Drive"
-                        description="Automatic backups of student documents and academic records."
-                        icon={<Puzzle className="text-amber-500" />}
-                        status="connected"
-                        onConfigure={() => handleConfigure("Google Drive")}
-                    />
+                    {isLoading && Array.from({ length: 4 }).map((_, index) => (
+                        <div key={`integration-skeleton-${index}`} className="h-56 animate-pulse rounded-2xl border border-slate-200 bg-white" />
+                    ))}
+                    {!isLoading && services.map((service) => (
+                        <IntegrationCard
+                            key={service.key}
+                            title={service.name}
+                            description={serviceConfigMap[service.key]?.description ?? "Configure this service for your school."}
+                            icon={serviceConfigMap[service.key]?.icon ?? <Settings2 className="text-slate-400" />}
+                            status={service.status}
+                            onConfigure={() => handleConfigure(service.name)}
+                        />
+                    ))}
                 </div>
 
                 {/* API Key Section */}
@@ -115,12 +186,12 @@ export default function IntegrationSettingsPage() {
                                     Enter your {activeService} API credentials. You can find these in your {activeService} developer dashboard.
                                 </p>
                             </div>
-                            <Input label="API Key / Secret" type="password" placeholder="sk_test_..." />
-                            <Input label="Webhook URL" placeholder="https://your-site.com/api/webhook" />
+                            <Input label="API Key / Secret" type="password" placeholder="sk_test_..." value={apiSecret} onChange={(event) => setApiSecret(event.target.value)} />
+                            <Input label="Webhook URL" placeholder="https://your-site.com/api/webhook" value={webhookUrl} onChange={(event) => setWebhookUrl(event.target.value)} />
 
                             <div className="flex justify-end gap-2 pt-6 border-t border-slate-100">
                                 <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-                                <Button className="bg-emerald-600 text-white hover:bg-emerald-700 font-bold px-8" onClick={(e) => { e.preventDefault(); success(`${activeService} configuration saved.`); setIsModalOpen(false); }}>Save Configuration</Button>
+                                <Button className="bg-emerald-600 text-white hover:bg-emerald-700 font-bold px-8" onClick={saveConfig} isLoading={isSaving}>Save Configuration</Button>
                             </div>
                         </div>
                     </motion.div>
@@ -135,7 +206,7 @@ function IntegrationCard({ title, description, icon, status, onConfigure }: Inte
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all group">
             <div className="flex items-start justify-between mb-4">
                 <div className="h-12 w-12 rounded-xl bg-slate-50 flex items-center justify-center group-hover:bg-emerald-50 transition-colors">
-                    {React.cloneElement(icon as React.ReactElement<any>, { size: 24 })}
+                    {React.cloneElement(icon, { size: 24 })}
                 </div>
                 {status === "connected" ? (
                     <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-bold uppercase tracking-wider">
