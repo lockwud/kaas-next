@@ -5,13 +5,15 @@ import DashboardLayout from "../../../components/DashboardLayout";
 import { DashboardCard } from "../../../components/DashboardCard";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
+import { Pagination } from "../../../components/ui/Pagination";
 import { Select } from "../../../components/ui/Select";
 import { motion, Variants } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { CalendarDays, Layers, Sparkles, UserRoundPlus, UsersRound, X, GraduationCap, BarChart3, School, Users, BookOpenText, Clock, CalendarCheck, UserPen, BookOpen, FileText, Megaphone, Calendar, Video, ClipboardList } from "lucide-react";
+import { BarChart3, BookOpen, BookOpenText, Calendar, CalendarCheck, CalendarDays, ClipboardList, Clock, Download, FileSpreadsheet, FileText, GraduationCap, Layers, Megaphone, Save, School, Search, Sparkles, Upload, UserPen, UserRoundPlus, UsersRound, Video, X } from "lucide-react";
 import { createClassRecord, hasDuplicateClass, loadClasses, saveClasses } from "../../../lib/classes-storage";
 import { createStudentDirectoryRecord, loadStudentsDirectory, saveStudentsDirectory } from "../../../lib/students-storage";
-import { students, users } from "../../../lib/school-data";
+import { assessments as seededAssessments, students, users } from "../../../lib/school-data";
+import { StudentDirectoryRecord } from "../../../types/school";
 import { useToast } from "@/hooks/useToast";
 
 const normalize = (value: string) => value.trim().toLowerCase();
@@ -31,11 +33,74 @@ const buildAcademicYearOptions = (currentAcademicYear: string) => {
   });
 };
 
+const getCurrentTerm = (date = new Date()): "first_term" | "second_term" | "third_term" => {
+  const month = date.getMonth();
+  if (month >= 8) {
+    return "first_term";
+  }
+  if (month <= 3) {
+    return "second_term";
+  }
+  return "third_term";
+};
+
 type CreationMode = "single" | "group";
 type StudentStep = "profile" | "guardian";
+type StudentRegistrationMode = "single" | "bulk";
+
+const ASSESSMENT_MAX_CLASS_EXERCISE = 20;
+const ASSESSMENT_MAX_HOMEWORK_PROJECT = 20;
+const ASSESSMENT_MAX_EXAM_INPUT = 100;
+const ASSESSMENT_EXAM_WEIGHT_MAX = 60;
+const ASSESSMENT_MODAL_DRAFT_KEY = "kaas_assessment_modal_draft";
+const ASSESSMENT_RECORDS_STORAGE_KEY = "kaas_assessment_records";
+
+interface AssessmentStudentOption {
+  id: string;
+  fullName: string;
+  className: string;
+  section: string;
+}
+
+interface AssessmentClassOption {
+  id: string;
+  className: string;
+  section: string;
+  label: string;
+}
+
+interface AssessmentEntryRow {
+  studentId: string;
+  studentName: string;
+  classExercise: number;
+  homeworkProject: number;
+  exam: number;
+}
+
+interface AssessmentStoredRecord {
+  id: string;
+  classId: string;
+  className?: string;
+  section?: string;
+  subject: string;
+  term: "first_term" | "second_term" | "third_term";
+  academicYear: string;
+  printedAt?: string;
+  rows: Array<AssessmentEntryRow & { total: number }>;
+  savedAt: string;
+}
+
+const toAssessmentClassKey = (className: string, section: string) => `${normalize(className)}|${normalize(section)}`;
+
+const toAssessmentClassLabel = (className: string, section: string) => `${className} ${section}`.trim();
+
+const toAssessmentTotal = (entry: AssessmentEntryRow) =>
+  Math.max(0, Math.min(ASSESSMENT_MAX_CLASS_EXERCISE, entry.classExercise)) +
+  Math.max(0, Math.min(ASSESSMENT_MAX_HOMEWORK_PROJECT, entry.homeworkProject)) +
+  (Math.max(0, Math.min(ASSESSMENT_MAX_EXAM_INPUT, entry.exam)) * ASSESSMENT_EXAM_WEIGHT_MAX) / ASSESSMENT_MAX_EXAM_INPUT;
 
 export default function AcademicsDashboard() {
-  const { success } = useToast();
+  const { success, info } = useToast();
   const router = useRouter();
 
   const [isClassModalOpen, setIsClassModalOpen] = React.useState(false);
@@ -54,7 +119,9 @@ export default function AcademicsDashboard() {
   const [assignedClassStudentIds, setAssignedClassStudentIds] = React.useState<string[]>([]);
 
   const [studentStep, setStudentStep] = React.useState<StudentStep>("profile");
+  const [studentRegistrationMode, setStudentRegistrationMode] = React.useState<StudentRegistrationMode>("single");
   const [studentName, setStudentName] = React.useState("");
+  const [bulkStudentNames, setBulkStudentNames] = React.useState("");
   const [studentClassAssignmentMode, setStudentClassAssignmentMode] = React.useState<"now" | "later">("later");
   const [selectedClassId, setSelectedClassId] = React.useState("");
   const [admissionDate, setAdmissionDate] = React.useState(new Date().toISOString().slice(0, 10));
@@ -178,7 +245,9 @@ export default function AcademicsDashboard() {
   const closeStudentModal = () => {
     setIsStudentModalOpen(false);
     setStudentStep("profile");
+    setStudentRegistrationMode("single");
     setStudentName("");
+    setBulkStudentNames("");
     setStudentClassAssignmentMode("later");
     setSelectedClassId("");
     setAdmissionDate(new Date().toISOString().slice(0, 10));
@@ -239,8 +308,14 @@ export default function AcademicsDashboard() {
   const [genericReason, setGenericReason] = React.useState("");
   const [genericLocation, setGenericLocation] = React.useState("");
   const [genericStartTime, setGenericStartTime] = React.useState("");
+  const [assessmentClassOptions, setAssessmentClassOptions] = React.useState<AssessmentClassOption[]>([]);
+  const [assessmentStudents, setAssessmentStudents] = React.useState<AssessmentStudentOption[]>([]);
+  const [assessmentEntries, setAssessmentEntries] = React.useState<AssessmentEntryRow[]>([]);
+  const [assessmentSearch, setAssessmentSearch] = React.useState("");
+  const [assessmentPage, setAssessmentPage] = React.useState(1);
+  const [assessmentPageSize, setAssessmentPageSize] = React.useState(20);
 
-  const handleAdd = (cardTitle: string, cardPath?: string) => {
+  const handleAdd = (cardTitle: string) => {
     if (cardTitle === "Classes") {
       openClassModal();
       return;
@@ -273,8 +348,76 @@ export default function AcademicsDashboard() {
     setGenericReason("");
     setGenericLocation("");
     setGenericStartTime("");
+    setAssessmentSearch("");
+    setAssessmentEntries([]);
+    setAssessmentPage(1);
+    setAssessmentPageSize(20);
     setIsUniversalModalOpen(true);
   };
+
+  React.useEffect(() => {
+    const directoryStudents = loadStudentsDirectory()
+      .map((student: StudentDirectoryRecord) => {
+        if (student.classAssignmentMode !== "now" || !student.className || !student.section) {
+          return null;
+        }
+
+        return {
+          id: student.id,
+          fullName: student.fullName,
+          className: student.className,
+          section: student.section,
+        };
+      })
+      .filter((student): student is AssessmentStudentOption => student !== null);
+
+    const seededStudents: AssessmentStudentOption[] = students.map((student) => ({
+      id: student.id,
+      fullName: student.fullName,
+      className: student.className,
+      section: student.section,
+    }));
+
+    const studentMap = new Map<string, AssessmentStudentOption>();
+    [...directoryStudents, ...seededStudents].forEach((student) => {
+      if (!studentMap.has(student.id)) {
+        studentMap.set(student.id, student);
+      }
+    });
+
+    const mergedStudents = Array.from(studentMap.values()).sort((a, b) => a.fullName.localeCompare(b.fullName));
+    setAssessmentStudents(mergedStudents);
+
+    const classMap = new Map<string, AssessmentClassOption>();
+
+    classDirectory.forEach((classRow) => {
+      const key = toAssessmentClassKey(classRow.className, classRow.section);
+      classMap.set(key, {
+        id: classRow.id,
+        className: classRow.className,
+        section: classRow.section,
+        label: toAssessmentClassLabel(classRow.className, classRow.section),
+      });
+    });
+
+    mergedStudents.forEach((student) => {
+      const key = toAssessmentClassKey(student.className, student.section);
+      if (!classMap.has(key)) {
+        classMap.set(key, {
+          id: `class_${key}`,
+          className: student.className,
+          section: student.section,
+          label: toAssessmentClassLabel(student.className, student.section),
+        });
+      }
+    });
+
+    const sortedClassOptions = Array.from(classMap.values()).sort((a, b) =>
+      a.label.localeCompare(b.label, undefined, { sensitivity: "base" }),
+    );
+
+    setAssessmentClassOptions(sortedClassOptions);
+  }, [classDirectory]);
 
   const createClass = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -346,9 +489,20 @@ export default function AcademicsDashboard() {
     const selectedAcademicYear =
       academicYearMode === "configured" ? configuredAcademicYear : customAcademicYear.trim();
 
+    const isBulkMode = studentRegistrationMode === "bulk";
+    const parsedBulkNames = bulkStudentNames
+      .split(/\r?\n|,/)
+      .map((name) => name.trim())
+      .filter(Boolean);
     const trimmedName = studentName.trim();
-    if (!trimmedName) {
+
+    if (!isBulkMode && !trimmedName) {
       setStudentErrorMessage("Student name is required.");
+      return;
+    }
+
+    if (isBulkMode && parsedBulkNames.length === 0) {
+      setStudentErrorMessage("Add at least one student name for bulk registration.");
       return;
     }
 
@@ -357,17 +511,17 @@ export default function AcademicsDashboard() {
       return;
     }
 
-    if (!guardianName.trim() || !guardianRelationship.trim() || !guardianContact.trim()) {
+    if (!isBulkMode && (!guardianName.trim() || !guardianRelationship.trim() || !guardianContact.trim())) {
       setStudentErrorMessage("Guardian name, relationship, and contact are required.");
       return;
     }
 
-    if (!houseAddress.trim()) {
+    if (!isBulkMode && !houseAddress.trim()) {
       setStudentErrorMessage("House address is required.");
       return;
     }
 
-    if (!emergencyContactName.trim() || !emergencyRelationship.trim() || !emergencyPhone.trim()) {
+    if (!isBulkMode && (!emergencyContactName.trim() || !emergencyRelationship.trim() || !emergencyPhone.trim())) {
       setStudentErrorMessage("Emergency contact details are required.");
       return;
     }
@@ -380,31 +534,257 @@ export default function AcademicsDashboard() {
     const selectedClass = classDirectory.find((item) => item.id === selectedClassId);
 
     const existing = loadStudentsDirectory();
-    const next = [
+    const namesToCreate = isBulkMode ? parsedBulkNames : [trimmedName];
+    const fallbackGuardianName = guardianName.trim() || "Not Provided";
+    const fallbackGuardianRelationship = guardianRelationship.trim() || "Guardian";
+    const fallbackGuardianContact = guardianContact.trim() || "Not Provided";
+    const fallbackAddress = houseAddress.trim() || "Not Provided";
+    const fallbackEmergencyName = emergencyContactName.trim() || "Not Provided";
+    const fallbackEmergencyRelationship = emergencyRelationship.trim() || "Guardian";
+    const fallbackEmergencyPhone = emergencyPhone.trim() || "Not Provided";
+
+    const createdRecords = namesToCreate.map((fullName) =>
       createStudentDirectoryRecord({
-        fullName: trimmedName,
+        fullName,
         classAssignmentMode: studentClassAssignmentMode,
         className: selectedClass?.className,
         section: selectedClass?.section,
         admissionDate,
         academicYear: selectedAcademicYear,
-        guardianName,
-        guardianRelationship,
-        guardianPrimaryContact: guardianContact,
+        guardianName: fallbackGuardianName,
+        guardianRelationship: fallbackGuardianRelationship,
+        guardianPrimaryContact: fallbackGuardianContact,
         guardianSecondaryContact: guardianOptionalContact,
-        houseAddress,
-        emergencyContactName,
-        emergencyContactRelationship: emergencyRelationship,
-        emergencyContactPhone: emergencyPhone,
+        houseAddress: fallbackAddress,
+        emergencyContactName: fallbackEmergencyName,
+        emergencyContactRelationship: fallbackEmergencyRelationship,
+        emergencyContactPhone: fallbackEmergencyPhone,
         previousAcademicHistory,
         healthRecords,
       }),
-      ...existing,
-    ];
+    );
+
+    const next = [...createdRecords, ...existing];
 
     saveStudentsDirectory(next);
-    success(`Student "${trimmedName}" has been registered successfully.`);
+    if (isBulkMode) {
+      success(`${createdRecords.length} students have been registered successfully.`);
+    } else {
+      success(`Student "${trimmedName}" has been registered successfully.`);
+    }
     closeStudentModal();
+  };
+
+  const isAssessmentModal = activeModalTitle === "Assessments";
+
+  const selectedAssessmentClass = React.useMemo(
+    () => assessmentClassOptions.find((option) => option.id === genericClass) ?? null,
+    [assessmentClassOptions, genericClass],
+  );
+
+  const classStudentsForAssessment = React.useMemo(() => {
+    if (!selectedAssessmentClass) {
+      return [];
+    }
+
+    return assessmentStudents
+      .filter(
+        (student) =>
+          normalize(student.className) === normalize(selectedAssessmentClass.className) &&
+          normalize(student.section) === normalize(selectedAssessmentClass.section),
+      )
+      .sort((a, b) => a.fullName.localeCompare(b.fullName));
+  }, [assessmentStudents, selectedAssessmentClass]);
+
+  const filteredAssessmentEntries = React.useMemo(() => {
+    const query = normalize(assessmentSearch);
+    if (!query) {
+      return assessmentEntries;
+    }
+
+    return assessmentEntries.filter((entry) => normalize(entry.studentName).includes(query));
+  }, [assessmentEntries, assessmentSearch]);
+
+  const assessmentSubjectOptions = React.useMemo(() => {
+    const subjects = Array.from(
+      new Set([
+        ...seededAssessments.map((assessment) => assessment.subject),
+        genericSubject.trim(),
+      ].filter(Boolean)),
+    ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+
+    return subjects.map((subject) => ({ value: subject, label: subject }));
+  }, [genericSubject]);
+
+  const totalAssessmentPages = Math.max(1, Math.ceil(filteredAssessmentEntries.length / assessmentPageSize));
+  const safeAssessmentPage = Math.min(Math.max(1, assessmentPage), totalAssessmentPages);
+  const paginatedAssessmentEntries = React.useMemo(
+    () =>
+      filteredAssessmentEntries.slice(
+        (safeAssessmentPage - 1) * assessmentPageSize,
+        safeAssessmentPage * assessmentPageSize,
+      ),
+    [filteredAssessmentEntries, safeAssessmentPage, assessmentPageSize],
+  );
+
+  React.useEffect(() => {
+    if (assessmentPage > totalAssessmentPages) {
+      setAssessmentPage(totalAssessmentPages);
+    }
+  }, [assessmentPage, totalAssessmentPages]);
+
+  React.useEffect(() => {
+    setAssessmentPage(1);
+  }, [assessmentSearch, genericClass, assessmentPageSize]);
+
+  React.useEffect(() => {
+    if (!isUniversalModalOpen || !isAssessmentModal) {
+      return;
+    }
+
+    if (!selectedAssessmentClass) {
+      setAssessmentEntries([]);
+      return;
+    }
+
+    setAssessmentEntries((current) => {
+      const existingByStudentId = new Map(current.map((entry) => [entry.studentId, entry]));
+
+      return classStudentsForAssessment.map((student) => {
+        const existing = existingByStudentId.get(student.id);
+        if (existing) {
+          return existing;
+        }
+
+        return {
+          studentId: student.id,
+          studentName: student.fullName,
+          classExercise: 0,
+          homeworkProject: 0,
+          exam: 0,
+        };
+      });
+    });
+  }, [isUniversalModalOpen, isAssessmentModal, selectedAssessmentClass, classStudentsForAssessment]);
+
+  React.useEffect(() => {
+    if (!isUniversalModalOpen || !isAssessmentModal) {
+      return;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(ASSESSMENT_MODAL_DRAFT_KEY);
+      if (!raw) {
+        return;
+      }
+
+      const draft = JSON.parse(raw) as {
+        classId?: string;
+        subject?: string;
+        rows?: AssessmentEntryRow[];
+      };
+
+      if (typeof draft.classId === "string") {
+        setGenericClass(draft.classId);
+      }
+      if (typeof draft.subject === "string") {
+        setGenericSubject(draft.subject);
+      }
+      if (Array.isArray(draft.rows)) {
+        setAssessmentEntries(draft.rows);
+      }
+    } catch {
+      // Ignore malformed draft payload.
+    }
+  }, [isUniversalModalOpen, isAssessmentModal]);
+
+  const updateAssessmentEntry = (
+    studentId: string,
+    field: "classExercise" | "homeworkProject" | "exam",
+    rawValue: string,
+  ) => {
+    if (rawValue.trim() === "") {
+      setAssessmentEntries((current) =>
+        current.map((entry) =>
+          entry.studentId === studentId
+            ? {
+              ...entry,
+              [field]: 0,
+            }
+            : entry,
+        ),
+      );
+      return;
+    }
+
+    const parsed = Number(rawValue);
+    const max =
+      field === "classExercise"
+        ? ASSESSMENT_MAX_CLASS_EXERCISE
+        : field === "homeworkProject"
+          ? ASSESSMENT_MAX_HOMEWORK_PROJECT
+          : ASSESSMENT_MAX_EXAM_INPUT;
+
+    if (!Number.isFinite(parsed)) {
+      return;
+    }
+
+    if (parsed < 0 || parsed > max) {
+      info(`Invalid score. ${field === "exam" ? "Exam" : field === "homeworkProject" ? "Homework + Project" : "Class Exercise"} must be between 0 and ${max}.`);
+      return;
+    }
+
+    setAssessmentEntries((current) =>
+      current.map((entry) =>
+        entry.studentId === studentId
+          ? {
+            ...entry,
+            [field]: parsed,
+          }
+          : entry,
+      ),
+    );
+  };
+
+  const saveAssessmentDraft = () => {
+    window.localStorage.setItem(
+      ASSESSMENT_MODAL_DRAFT_KEY,
+      JSON.stringify({
+        classId: genericClass,
+        subject: genericSubject,
+        rows: assessmentEntries,
+      }),
+    );
+    success("Assessment draft saved.");
+  };
+
+  const exportAssessmentCsv = () => {
+    if (assessmentEntries.length === 0) {
+      success("No assessment rows to export.");
+      return;
+    }
+
+    const rows = [
+      ["Student Name", "Class Exercise (/20)", "Homework + Project (/20)", "Exam (/100)", "Total (/100)"],
+      ...assessmentEntries.map((entry) => [
+        entry.studentName,
+        String(entry.classExercise),
+        String(entry.homeworkProject),
+        String(entry.exam),
+        String(toAssessmentTotal(entry)),
+      ]),
+    ];
+
+    const csv = rows.map((line) => line.map((cell) => `"${cell.replace(/"/g, "\"\"")}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `assessment-${selectedAssessmentClass?.label ?? "class"}-${genericSubject || "subject"}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -428,7 +808,7 @@ export default function AcademicsDashboard() {
               accentColor={card.accent}
               compact
               onView={() => (card.path ? router.push(card.path) : console.log(`View ${card.title}`))}
-              onAdd={() => handleAdd(card.title, card.path)}
+              onAdd={() => handleAdd(card.title)}
             />
           </motion.div>
         ))}
@@ -634,6 +1014,33 @@ export default function AcademicsDashboard() {
               </div>
 
               <form onSubmit={createStudent} className="space-y-5 px-6 py-5">
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <p className="text-sm font-semibold text-slate-800">Registration Mode</p>
+                  <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setStudentRegistrationMode("single")}
+                      className={`rounded-md px-3 py-2 text-xs font-medium ${studentRegistrationMode === "single" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                        }`}
+                    >
+                      Single Student
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStudentRegistrationMode("bulk")}
+                      className={`rounded-md px-3 py-2 text-xs font-medium ${studentRegistrationMode === "bulk" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                        }`}
+                    >
+                      Bulk Upload
+                    </button>
+                  </div>
+                  {studentRegistrationMode === "bulk" && (
+                    <p className="mt-2 text-xs text-slate-500">
+                      Guardian, emergency, and history/health details are optional in bulk mode.
+                    </p>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
                   <button
                     type="button"
@@ -657,7 +1064,25 @@ export default function AcademicsDashboard() {
 
                 {studentStep === "profile" ? (
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <Input label="Student Name" value={studentName} onChange={(event) => setStudentName(event.target.value)} placeholder="Student full name" required />
+                    {studentRegistrationMode === "single" ? (
+                      <Input
+                        label="Student Name"
+                        value={studentName}
+                        onChange={(event) => setStudentName(event.target.value)}
+                        placeholder="Student full name"
+                        required
+                      />
+                    ) : (
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700">Student Names (one per line or comma-separated)</label>
+                        <textarea
+                          className="w-full min-h-28 rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                          value={bulkStudentNames}
+                          onChange={(event) => setBulkStudentNames(event.target.value)}
+                          placeholder={`Ada Obi\nKhalid Musa\nBinta Ali`}
+                        />
+                      </div>
+                    )}
 
                     <div className="rounded-xl border border-slate-200 p-3">
                       <p className="text-sm font-semibold text-slate-800">Academic Year</p>
@@ -761,13 +1186,13 @@ export default function AcademicsDashboard() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <Input label="Guardian Name" value={guardianName} onChange={(event) => setGuardianName(event.target.value)} placeholder="Guardian full name" required />
-                    <Input label="Relationship" value={guardianRelationship} onChange={(event) => setGuardianRelationship(event.target.value)} placeholder="Mother, Father, Aunt..." required />
-                    <Input label="Guardian Contact" value={guardianContact} onChange={(event) => setGuardianContact(event.target.value)} placeholder="Primary phone" required />
+                    <Input label="Guardian Name" value={guardianName} onChange={(event) => setGuardianName(event.target.value)} placeholder="Guardian full name" required={studentRegistrationMode === "single"} />
+                    <Input label="Relationship" value={guardianRelationship} onChange={(event) => setGuardianRelationship(event.target.value)} placeholder="Mother, Father, Aunt..." required={studentRegistrationMode === "single"} />
+                    <Input label="Guardian Contact" value={guardianContact} onChange={(event) => setGuardianContact(event.target.value)} placeholder="Primary phone" required={studentRegistrationMode === "single"} />
                     <Input label="Optional Contact" value={guardianOptionalContact} onChange={(event) => setGuardianOptionalContact(event.target.value)} placeholder="Secondary phone (optional)" />
-                    <Input label="Emergency Contact Name" value={emergencyContactName} onChange={(event) => setEmergencyContactName(event.target.value)} placeholder="Who to call if guardian unavailable" required />
-                    <Input label="Emergency Relationship" value={emergencyRelationship} onChange={(event) => setEmergencyRelationship(event.target.value)} placeholder="Uncle, Sister..." required />
-                    <Input label="Emergency Contact" value={emergencyPhone} onChange={(event) => setEmergencyPhone(event.target.value)} placeholder="Emergency phone" required />
+                    <Input label="Emergency Contact Name" value={emergencyContactName} onChange={(event) => setEmergencyContactName(event.target.value)} placeholder="Who to call if guardian unavailable" required={studentRegistrationMode === "single"} />
+                    <Input label="Emergency Relationship" value={emergencyRelationship} onChange={(event) => setEmergencyRelationship(event.target.value)} placeholder="Uncle, Sister..." required={studentRegistrationMode === "single"} />
+                    <Input label="Emergency Contact" value={emergencyPhone} onChange={(event) => setEmergencyPhone(event.target.value)} placeholder="Emergency phone" required={studentRegistrationMode === "single"} />
 
                     <div className="space-y-2 md:col-span-2">
                       <label className="text-sm font-medium text-gray-700">House Address</label>
@@ -821,17 +1246,19 @@ export default function AcademicsDashboard() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
+            className="w-full max-w-6xl max-h-[98vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
           >
-            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
+            <div className="flex items-center justify-between border-b border-slate-200 bg-[#0F172A] px-6 py-3">
               <div>
-                <h3 className="text-lg font-semibold text-slate-900">Add {activeModalTitle}</h3>
-                <p className="text-xs text-slate-500">Quickly add a new {activeModalTitle.toLowerCase()} record.</p>
+                <h3 className="text-base font-semibold text-white">{isAssessmentModal ? "Assessment Entry" : `Add ${activeModalTitle}`}</h3>
+                <p className="text-[11px] text-slate-200">
+                  {isAssessmentModal ? "Enter class assessment scores." : `Quickly add a new ${activeModalTitle.toLowerCase()} record.`}
+                </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsUniversalModalOpen(false)}
-                className="rounded-full p-1 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700"
+                className="rounded-full p-1 text-slate-200 transition-colors hover:bg-slate-700 hover:text-white"
               >
                 <X size={18} />
               </button>
@@ -840,6 +1267,64 @@ export default function AcademicsDashboard() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
+                if (isAssessmentModal) {
+                  if (!genericClass) {
+                    success("Select class first.");
+                    return;
+                  }
+                  if (!genericSubject.trim()) {
+                    success("Enter subject first.");
+                    return;
+                  }
+                  if (assessmentEntries.length === 0) {
+                    success("No students available in this class.");
+                    return;
+                  }
+
+                  const payload = {
+                    id:
+                      typeof crypto !== "undefined" && "randomUUID" in crypto
+                        ? crypto.randomUUID()
+                        : `assessment_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                    classId: genericClass,
+                    className: selectedAssessmentClass?.className,
+                    section: selectedAssessmentClass?.section,
+                    subject: genericSubject.trim(),
+                    term: getCurrentTerm(),
+                    academicYear: currentAcademicYear,
+                    weights: {
+                      classExercise: ASSESSMENT_MAX_CLASS_EXERCISE,
+                      homeworkProject: ASSESSMENT_MAX_HOMEWORK_PROJECT,
+                      exam: ASSESSMENT_EXAM_WEIGHT_MAX,
+                    },
+                    rows: assessmentEntries.map((entry) => ({
+                      studentId: entry.studentId,
+                      studentName: entry.studentName,
+                      classExercise: entry.classExercise,
+                      homeworkProject: entry.homeworkProject,
+                      exam: entry.exam,
+                      total: toAssessmentTotal(entry),
+                    })),
+                    savedAt: new Date().toISOString(),
+                  };
+
+                  window.localStorage.setItem("kaas_assessment_last_saved", JSON.stringify(payload));
+                  try {
+                    const existing = JSON.parse(
+                      window.localStorage.getItem(ASSESSMENT_RECORDS_STORAGE_KEY) ?? "[]",
+                    ) as AssessmentStoredRecord[];
+                    window.localStorage.setItem(
+                      ASSESSMENT_RECORDS_STORAGE_KEY,
+                      JSON.stringify([payload as AssessmentStoredRecord, ...existing]),
+                    );
+                  } catch {
+                    window.localStorage.setItem(ASSESSMENT_RECORDS_STORAGE_KEY, JSON.stringify([payload]));
+                  }
+                  success("Assessment entry saved successfully.");
+                  setIsUniversalModalOpen(false);
+                  return;
+                }
+
                 console.log(`Creating ${activeModalTitle}:`, {
                   genericTitle,
                   genericDescription,
@@ -865,201 +1350,358 @@ export default function AcademicsDashboard() {
                 success(`${activeModalTitle} record has been saved successfully.`);
                 setIsUniversalModalOpen(false);
               }}
-              className="space-y-4 px-6 py-5 max-h-[80vh] overflow-y-auto"
+              className="space-y-4 px-6 py-5 max-h-[90vh] overflow-y-auto"
             >
-              {/* Common Fields: Student Name (for individual records) */}
-              {(activeModalTitle === "Attendance" || activeModalTitle === "Student Leaves" || activeModalTitle === "Terminal Reports") && (
-                <Input
-                  label="Student Name"
-                  value={genericStudentName}
-                  onChange={(e) => setGenericStudentName(e.target.value)}
-                  placeholder="Full name of student"
-                  required
-                />
-              )}
+              {isAssessmentModal && (
+                <div className="space-y-3">
+                  <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[11px] text-slate-700">
+                    <p className="font-semibold text-slate-900">Grading System Information</p>
+                    <p>Class Exercise: 20 marks, Homework + Project: 20 marks, Exam entered over 100 and converted to 60%. Total = 100.</p>
+                  </div>
 
-              {/* Title / Name Field */}
-              {activeModalTitle !== "Attendance" && activeModalTitle !== "Student Leaves" && activeModalTitle !== "Terminal Reports" && activeModalTitle !== "Time Table" && (
-                <Input
-                  label={activeModalTitle === "Sections" ? "Section Name" : activeModalTitle === "Subjects" ? "Subject Name" : "Title / Name"}
-                  value={genericTitle}
-                  onChange={(e) => setGenericTitle(e.target.value)}
-                  placeholder={`Enter ${activeModalTitle.toLowerCase()} name`}
-                  required
-                />
-              )}
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <Select
+                      label="Class"
+                      value={genericClass}
+                      onChange={(event) => setGenericClass(event.target.value)}
+                      options={assessmentClassOptions.map((option) => ({ value: option.id, label: option.label }))}
+                      required
+                    />
+                    <Select
+                      label="Subject"
+                      value={genericSubject}
+                      onChange={(event) => setGenericSubject(event.target.value)}
+                      options={assessmentSubjectOptions}
+                      required
+                    />
+                    <Input
+                      label="Search Student"
+                      value={assessmentSearch}
+                      onChange={(event) => setAssessmentSearch(event.target.value)}
+                      placeholder="Search by name"
+                      icon={<Search />}
+                      className="rounded-full border-slate-300 bg-slate-50/80"
+                    />
+                  </div>
 
-              {/* Class Selection */}
-              {activeModalTitle !== "Sections" && activeModalTitle !== "Subjects" && activeModalTitle !== "Notice Board" && activeModalTitle !== "Events" && (
-                <Select
-                  label="Class"
-                  value={genericClass}
-                  onChange={(e) => setGenericClass(e.target.value)}
-                  options={classOptions}
-                  required
-                />
-              )}
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" className="h-9 px-3 text-xs" onClick={saveAssessmentDraft}>
+                      <Save size={14} className="mr-1" /> Save Draft
+                    </Button>
+                    <Button type="button" variant="outline" className="h-9 px-3 text-xs" onClick={exportAssessmentCsv}>
+                      <FileSpreadsheet size={14} className="mr-1" /> Export
+                    </Button>
+                    <Button type="button" variant="outline" className="h-9 px-3 text-xs" onClick={() => success("Import from Excel will be connected next.")}>
+                      <Upload size={14} className="mr-1" /> Import
+                    </Button>
+                    <Button type="button" variant="outline" className="h-9 px-3 text-xs" onClick={() => success("Template download will be connected next.")}>
+                      <Download size={14} className="mr-1" /> Template
+                    </Button>
+                  </div>
 
-              {/* Subject Field */}
-              {(activeModalTitle === "Assessments" || activeModalTitle === "Home Work" || activeModalTitle === "Study Materials" || activeModalTitle === "Time Table") && (
-                <Input
-                  label="Subject"
-                  value={genericSubject}
-                  onChange={(e) => setGenericSubject(e.target.value)}
-                  placeholder="e.g. Mathematics"
-                  required
-                />
-              )}
+                  <div className="overflow-hidden rounded-lg border border-slate-200">
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[720px] border-collapse text-left">
+                        <thead>
+                          <tr className="bg-[#0F172A] text-[10px] font-semibold uppercase tracking-wide text-white">
+                            <th className="px-3 py-2">Student Name</th>
+                            <th className="px-3 py-2">Class Exercise</th>
+                            <th className="px-3 py-2">Homework + Project</th>
+                            <th className="px-3 py-2">Exam (/100)</th>
+                            <th className="px-3 py-2">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paginatedAssessmentEntries.length > 0 ? (
+                            paginatedAssessmentEntries.map((entry) => (
+                              <tr key={entry.studentId} className="border-t border-slate-100 text-xs text-slate-700">
+                                <td className="px-3 py-2 font-medium">{entry.studentName}</td>
+                                <td className="px-3 py-2">
+                                  <CompactScoreInput
+                                    value={entry.classExercise}
+                                    max={ASSESSMENT_MAX_CLASS_EXERCISE}
+                                    onChange={(value) => updateAssessmentEntry(entry.studentId, "classExercise", value)}
+                                  />
+                                </td>
+                                <td className="px-3 py-2">
+                                  <CompactScoreInput
+                                    value={entry.homeworkProject}
+                                    max={ASSESSMENT_MAX_HOMEWORK_PROJECT}
+                                    onChange={(value) => updateAssessmentEntry(entry.studentId, "homeworkProject", value)}
+                                  />
+                                </td>
+                                <td className="px-3 py-2">
+                                  <CompactScoreInput
+                                    value={entry.exam}
+                                    max={ASSESSMENT_MAX_EXAM_INPUT}
+                                    onChange={(value) => updateAssessmentEntry(entry.studentId, "exam", value)}
+                                  />
+                                  <p className="mt-1 text-[10px] text-slate-500">
+                                    = {((entry.exam * ASSESSMENT_EXAM_WEIGHT_MAX) / ASSESSMENT_MAX_EXAM_INPUT).toFixed(1)} /60
+                                  </p>
+                                </td>
+                                <td className="px-3 py-2 font-semibold text-[#1D4ED8]">{toAssessmentTotal(entry).toFixed(2)}</td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={5} className="px-3 py-6 text-center text-xs text-slate-500">
+                                {selectedAssessmentClass ? "No students found." : "Select class to load students."}
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="border-t border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+                      <Pagination
+                        totalItems={filteredAssessmentEntries.length}
+                        currentPage={safeAssessmentPage}
+                        pageSize={assessmentPageSize}
+                        onPageChange={setAssessmentPage}
+                        onPageSizeChange={(size) => {
+                          setAssessmentPageSize(size);
+                          setAssessmentPage(1);
+                        }}
+                        pageSizeOptions={[20, 50, 100]}
+                      />
+                    </div>
+                  </div>
 
-              {/* Sections / Subjects Specific */}
-              {(activeModalTitle === "Sections" || activeModalTitle === "Subjects") && (
-                <div className="grid grid-cols-2 gap-4">
-                  <Input
-                    label={activeModalTitle === "Subjects" ? "Subject Code" : "Capacity"}
-                    value={activeModalTitle === "Subjects" ? genericCode : genericCapacity}
-                    onChange={(e) => activeModalTitle === "Subjects" ? setGenericCode(e.target.value) : setGenericCapacity(e.target.value)}
-                    placeholder={activeModalTitle === "Subjects" ? "MAT-101" : "e.g. 40"}
-                    required
-                  />
-                  <Input
-                    label="Category"
-                    value={genericCategory}
-                    onChange={(e) => setGenericCategory(e.target.value)}
-                    placeholder="e.g. Core, Elective, Primary"
-                    required
-                  />
-                </div>
-              )}
-
-              {/* Reports Specific */}
-              {activeModalTitle === "Terminal Reports" && (
-                <div className="grid grid-cols-2 gap-4">
-                  <Select
-                    label="Term"
-                    value={genericTerm}
-                    onChange={(e) => setGenericTerm(e.target.value)}
-                    options={[
-                      { value: "first_term", label: "First Term" },
-                      { value: "second_term", label: "Second Term" },
-                      { value: "third_term", label: "Third Term" },
-                    ]}
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input label="Score %" value={genericScore} onChange={(e) => setGenericScore(e.target.value)} placeholder="85" required />
-                    <Input label="Grade" value={genericGrade} onChange={(e) => setGenericGrade(e.target.value)} placeholder="A" required />
+                  <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+                    <Button type="button" variant="outline" className="h-9 px-4 text-xs" onClick={() => setIsUniversalModalOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" className="h-9 bg-[#1D4ED8] px-4 text-xs hover:bg-[#1E40AF]">
+                      Save Assessment
+                    </Button>
                   </div>
                 </div>
               )}
 
-              {/* Time Table Specific */}
-              {activeModalTitle === "Time Table" && (
-                <div className="grid grid-cols-2 gap-4">
-                  <Select
-                    label="Day"
-                    value={genericDay}
-                    onChange={(e) => setGenericDay(e.target.value)}
-                    options={[
-                      { value: "Monday", label: "Monday" },
-                      { value: "Tuesday", label: "Tuesday" },
-                      { value: "Wednesday", label: "Wednesday" },
-                      { value: "Thursday", label: "Thursday" },
-                      { value: "Friday", label: "Friday" },
-                    ]}
-                  />
-                  <Input label="Period" value={genericPeriod} onChange={(e) => setGenericPeriod(e.target.value)} placeholder="e.g. 1st Period" required />
-                </div>
-              )}
-
-              {/* Attendance / Leaves / Homework / Live Classes Status */}
-              {(activeModalTitle === "Attendance" || activeModalTitle === "Student Leaves" || activeModalTitle === "Home Work" || activeModalTitle === "Live Classes (Go Pro)" || activeModalTitle === "Sections") && (
-                <Select
-                  label="Status"
-                  value={genericStatus}
-                  onChange={(e) => setGenericStatus(e.target.value)}
-                  options={
-                    activeModalTitle === "Attendance"
-                      ? [{ value: "Present", label: "Present" }, { value: "Absent", label: "Absent" }, { value: "Late", label: "Late" }]
-                      : activeModalTitle === "Student Leaves"
-                        ? [{ value: "Pending", label: "Pending" }, { value: "Approved", label: "Approved" }, { value: "Rejected", label: "Rejected" }]
-                        : activeModalTitle === "Home Work"
-                          ? [{ value: "Open", label: "Open" }, { value: "Closed", label: "Closed" }]
-                          : activeModalTitle === "Sections"
-                            ? [{ value: "Active", label: "Active" }, { value: "Inactive", label: "Inactive" }]
-                            : [{ value: "Upcoming", label: "Upcoming" }, { value: "Ongoing", label: "Ongoing" }]
-                  }
-                />
-              )}
-
-              {/* Leaves Specific */}
-              {activeModalTitle === "Student Leaves" && (
-                <div className="grid grid-cols-1 gap-4">
-                  <Input label="Duration" value={genericDuration} onChange={(e) => setGenericDuration(e.target.value)} placeholder="e.g. 3 days" required />
-                  <textarea
-                    className="w-full min-h-20 rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
-                    value={genericReason}
-                    onChange={(e) => setGenericReason(e.target.value)}
-                    placeholder="Reason for leave..."
-                    required
-                  />
-                </div>
-              )}
-
-              {/* Events Specific */}
-              {activeModalTitle === "Events" && (
-                <Input label="Location" value={genericLocation} onChange={(e) => setGenericLocation(e.target.value)} placeholder="e.g. School Hall" required />
-              )}
-
-              {/* Live Classes / Time Table Specific Teacher */}
-              {(activeModalTitle === "Live Classes (Go Pro)" || activeModalTitle === "Time Table") && (
-                <div className="grid grid-cols-2 gap-4">
-                  <Input label="Teacher" value={genericTeacher} onChange={(e) => setGenericTeacher(e.target.value)} placeholder="Enter teacher name" required />
-                  {activeModalTitle === "Live Classes (Go Pro)" && (
-                    <Input label="Start Time" value={genericStartTime} onChange={(e) => setGenericStartTime(e.target.value)} placeholder="e.g. 10:00 AM" required />
+              {!isAssessmentModal && (
+                <>
+                  {/* Common Fields: Student Name (for individual records) */}
+                  {(activeModalTitle === "Attendance" || activeModalTitle === "Student Leaves" || activeModalTitle === "Terminal Reports") && (
+                    <Input
+                      label="Student Name"
+                      value={genericStudentName}
+                      onChange={(e) => setGenericStudentName(e.target.value)}
+                      placeholder="Full name of student"
+                      required
+                    />
                   )}
-                </div>
-              )}
 
-              {/* Date Field */}
-              {activeModalTitle !== "Sections" && activeModalTitle !== "Subjects" && activeModalTitle !== "Time Table" && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">{activeModalTitle === "Home Work" ? "Deadline" : "Date"}</label>
-                  <input
-                    type="date"
-                    value={genericDate}
-                    onChange={(e) => setGenericDate(e.target.value)}
-                    className="w-full rounded-lg border border-gray-200 p-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-600"
-                    required
-                  />
-                </div>
-              )}
+                  {/* Title / Name Field */}
+                  {activeModalTitle !== "Attendance" && activeModalTitle !== "Student Leaves" && activeModalTitle !== "Terminal Reports" && activeModalTitle !== "Time Table" && (
+                    <Input
+                      label={activeModalTitle === "Sections" ? "Section Name" : activeModalTitle === "Subjects" ? "Subject Name" : "Title / Name"}
+                      value={genericTitle}
+                      onChange={(e) => setGenericTitle(e.target.value)}
+                      placeholder={`Enter ${activeModalTitle.toLowerCase()} name`}
+                      required
+                    />
+                  )}
 
-              {/* Description / Content (for NoticeBoard, Events, Materials, Homework) */}
-              {(activeModalTitle === "Notice Board" || activeModalTitle === "Events" || activeModalTitle === "Study Materials" || activeModalTitle === "Home Work") && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Description / Content</label>
-                  <textarea
-                    className="w-full min-h-24 rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
-                    value={genericDescription}
-                    onChange={(e) => setGenericDescription(e.target.value)}
-                    placeholder="Enter details..."
-                    required
-                  />
-                </div>
-              )}
+                  {/* Class Selection */}
+                  {activeModalTitle !== "Sections" && activeModalTitle !== "Subjects" && activeModalTitle !== "Notice Board" && activeModalTitle !== "Events" && (
+                    <Select
+                      label="Class"
+                      value={genericClass}
+                      onChange={(e) => setGenericClass(e.target.value)}
+                      options={classOptions}
+                      required
+                    />
+                  )}
 
-              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
-                <Button type="button" variant="outline" onClick={() => setIsUniversalModalOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit">
-                  Save {activeModalTitle}
-                </Button>
-              </div>
+                  {/* Subject Field */}
+                  {(activeModalTitle === "Assessments" || activeModalTitle === "Home Work" || activeModalTitle === "Study Materials" || activeModalTitle === "Time Table") && (
+                    <Input
+                      label="Subject"
+                      value={genericSubject}
+                      onChange={(e) => setGenericSubject(e.target.value)}
+                      placeholder="e.g. Mathematics"
+                      required
+                    />
+                  )}
+
+                  {/* Sections / Subjects Specific */}
+                  {(activeModalTitle === "Sections" || activeModalTitle === "Subjects") && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <Input
+                        label={activeModalTitle === "Subjects" ? "Subject Code" : "Capacity"}
+                        value={activeModalTitle === "Subjects" ? genericCode : genericCapacity}
+                        onChange={(e) => activeModalTitle === "Subjects" ? setGenericCode(e.target.value) : setGenericCapacity(e.target.value)}
+                        placeholder={activeModalTitle === "Subjects" ? "MAT-101" : "e.g. 40"}
+                        required
+                      />
+                      <Input
+                        label="Category"
+                        value={genericCategory}
+                        onChange={(e) => setGenericCategory(e.target.value)}
+                        placeholder="e.g. Core, Elective, Primary"
+                        required
+                      />
+                    </div>
+                  )}
+
+                  {/* Reports Specific */}
+                  {activeModalTitle === "Terminal Reports" && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <Select
+                        label="Term"
+                        value={genericTerm}
+                        onChange={(e) => setGenericTerm(e.target.value)}
+                        options={[
+                          { value: "first_term", label: "First Term" },
+                          { value: "second_term", label: "Second Term" },
+                          { value: "third_term", label: "Third Term" },
+                        ]}
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input label="Score %" value={genericScore} onChange={(e) => setGenericScore(e.target.value)} placeholder="85" required />
+                        <Input label="Grade" value={genericGrade} onChange={(e) => setGenericGrade(e.target.value)} placeholder="A" required />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Time Table Specific */}
+                  {activeModalTitle === "Time Table" && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <Select
+                        label="Day"
+                        value={genericDay}
+                        onChange={(e) => setGenericDay(e.target.value)}
+                        options={[
+                          { value: "Monday", label: "Monday" },
+                          { value: "Tuesday", label: "Tuesday" },
+                          { value: "Wednesday", label: "Wednesday" },
+                          { value: "Thursday", label: "Thursday" },
+                          { value: "Friday", label: "Friday" },
+                        ]}
+                      />
+                      <Input label="Period" value={genericPeriod} onChange={(e) => setGenericPeriod(e.target.value)} placeholder="e.g. 1st Period" required />
+                    </div>
+                  )}
+
+                  {/* Attendance / Leaves / Homework / Live Classes Status */}
+                  {(activeModalTitle === "Attendance" || activeModalTitle === "Student Leaves" || activeModalTitle === "Home Work" || activeModalTitle === "Live Classes (Go Pro)" || activeModalTitle === "Sections") && (
+                    <Select
+                      label="Status"
+                      value={genericStatus}
+                      onChange={(e) => setGenericStatus(e.target.value)}
+                      options={
+                        activeModalTitle === "Attendance"
+                          ? [{ value: "Present", label: "Present" }, { value: "Absent", label: "Absent" }, { value: "Late", label: "Late" }]
+                          : activeModalTitle === "Student Leaves"
+                            ? [{ value: "Pending", label: "Pending" }, { value: "Approved", label: "Approved" }, { value: "Rejected", label: "Rejected" }]
+                            : activeModalTitle === "Home Work"
+                              ? [{ value: "Open", label: "Open" }, { value: "Closed", label: "Closed" }]
+                              : activeModalTitle === "Sections"
+                                ? [{ value: "Active", label: "Active" }, { value: "Inactive", label: "Inactive" }]
+                                : [{ value: "Upcoming", label: "Upcoming" }, { value: "Ongoing", label: "Ongoing" }]
+                      }
+                    />
+                  )}
+
+                  {/* Leaves Specific */}
+                  {activeModalTitle === "Student Leaves" && (
+                    <div className="grid grid-cols-1 gap-4">
+                      <Input label="Duration" value={genericDuration} onChange={(e) => setGenericDuration(e.target.value)} placeholder="e.g. 3 days" required />
+                      <textarea
+                        className="w-full min-h-20 rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                        value={genericReason}
+                        onChange={(e) => setGenericReason(e.target.value)}
+                        placeholder="Reason for leave..."
+                        required
+                      />
+                    </div>
+                  )}
+
+                  {/* Events Specific */}
+                  {activeModalTitle === "Events" && (
+                    <Input label="Location" value={genericLocation} onChange={(e) => setGenericLocation(e.target.value)} placeholder="e.g. School Hall" required />
+                  )}
+
+                  {/* Live Classes / Time Table Specific Teacher */}
+                  {(activeModalTitle === "Live Classes (Go Pro)" || activeModalTitle === "Time Table") && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <Input label="Teacher" value={genericTeacher} onChange={(e) => setGenericTeacher(e.target.value)} placeholder="Enter teacher name" required />
+                      {activeModalTitle === "Live Classes (Go Pro)" && (
+                        <Input label="Start Time" value={genericStartTime} onChange={(e) => setGenericStartTime(e.target.value)} placeholder="e.g. 10:00 AM" required />
+                      )}
+                    </div>
+                  )}
+
+                  {/* Date Field */}
+                  {activeModalTitle !== "Sections" && activeModalTitle !== "Subjects" && activeModalTitle !== "Time Table" && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">{activeModalTitle === "Home Work" ? "Deadline" : "Date"}</label>
+                      <input
+                        type="date"
+                        value={genericDate}
+                        onChange={(e) => setGenericDate(e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 p-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-600"
+                        required
+                      />
+                    </div>
+                  )}
+
+                  {/* Description / Content (for NoticeBoard, Events, Materials, Homework) */}
+                  {(activeModalTitle === "Notice Board" || activeModalTitle === "Events" || activeModalTitle === "Study Materials" || activeModalTitle === "Home Work") && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">Description / Content</label>
+                      <textarea
+                        className="w-full min-h-24 rounded-lg border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                        value={genericDescription}
+                        onChange={(e) => setGenericDescription(e.target.value)}
+                        placeholder="Enter details..."
+                        required
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                    <Button type="button" variant="outline" onClick={() => setIsUniversalModalOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit">
+                      Save {activeModalTitle}
+                    </Button>
+                  </div>
+                </>
+              )}
             </form>
           </motion.div>
         </div>
-      )
-      }
-    </DashboardLayout >
+      )}
+    </DashboardLayout>
+  );
+}
+
+function CompactScoreInput({
+  value,
+  max,
+  onChange,
+}: {
+  value: number;
+  max: number;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="flex w-[120px] items-center overflow-hidden rounded border border-slate-200 bg-white">
+      <input
+        type="number"
+        min={0}
+        max={max}
+        step="0.1"
+        value={value === 0 ? "" : value}
+        placeholder="0"
+        onChange={(event) => onChange(event.target.value)}
+        onFocus={(event) => event.currentTarget.select()}
+        className="h-8 w-full border-0 px-2 text-xs text-slate-800 focus:outline-none"
+      />
+      <span className="border-l border-slate-200 bg-slate-50 px-2 py-2 text-[10px] text-slate-500">/{max}</span>
+    </div>
   );
 }
