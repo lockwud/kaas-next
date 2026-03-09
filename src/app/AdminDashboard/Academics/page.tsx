@@ -671,36 +671,54 @@ export default function AcademicsDashboard() {
 
     const namesToCreate = isBulkMode ? parsedBulkNames : [trimmedName];
     try {
-      await Promise.all(
-        namesToCreate.map((fullName) =>
-          apiRequest<StudentApi>(API_ENDPOINTS.students, {
-            method: "POST",
-            body: JSON.stringify({
-              fullName,
-              className: studentClassAssignmentMode === "now" ? selectedClass?.className : undefined,
-              section: studentClassAssignmentMode === "now" ? selectedClass?.section : undefined,
-              classId: studentClassAssignmentMode === "now" ? selectedClassId : undefined,
-              admissionDate,
-              academicYear: selectedAcademicYear,
-              guardianName: guardianName.trim() || "Not Provided",
-              guardianRelationship: guardianRelationship.trim() || "Guardian",
-              guardianPrimaryContact: guardianContact.trim() || "Not Provided",
-              guardianSecondaryContact: guardianOptionalContact,
-              houseAddress: houseAddress.trim() || "Not Provided",
-              emergencyContactName: emergencyContactName.trim() || "Not Provided",
-              emergencyContactRelationship: emergencyRelationship.trim() || "Guardian",
-              emergencyContactPhone: emergencyPhone.trim() || "Not Provided",
-              previousAcademicHistory,
-              healthRecords,
-            }),
-          }),
-        ),
-      );
-
-      await loadDirectoryData({ classes: true, students: true });
       if (isBulkMode) {
-        success(`${namesToCreate.length} students have been registered successfully.`);
+        // Use bulk endpoint - only requires fullName and className
+        const studentsPayload = namesToCreate.map((fullName) => ({
+          fullName,
+          className: studentClassAssignmentMode === "now" ? selectedClass?.className : undefined,
+        }));
+
+        const response = await apiRequest<{ success: boolean; created: number; failed: number; errors: Array<{ row: number; error: string }> }>(
+          `${API_ENDPOINTS.students}/bulk`,
+          {
+            method: "POST",
+            body: JSON.stringify({ students: studentsPayload }),
+          },
+        );
+
+        if (response.failed > 0) {
+          const errorSummary = response.errors.map((e: { row: number; error: string }) => `Row ${e.row}: ${e.error}`).join("; ");
+          setStudentErrorMessage(`Upload completed with errors: ${errorSummary}`);
+          return;
+        }
+
+        await loadDirectoryData({ classes: true, students: true });
+        success(`${response.created} students have been registered successfully.`);
       } else {
+        // Single student creation - uses original endpoint with full details
+        await apiRequest<StudentApi>(API_ENDPOINTS.students, {
+          method: "POST",
+          body: JSON.stringify({
+            fullName: trimmedName,
+            className: studentClassAssignmentMode === "now" ? selectedClass?.className : undefined,
+            section: studentClassAssignmentMode === "now" ? selectedClass?.section : undefined,
+            classId: studentClassAssignmentMode === "now" ? selectedClassId : undefined,
+            admissionDate,
+            academicYear: selectedAcademicYear,
+            guardianName: guardianName.trim() || "Not Provided",
+            guardianRelationship: guardianRelationship.trim() || "Guardian",
+            guardianPrimaryContact: guardianContact.trim() || "Not Provided",
+            guardianSecondaryContact: guardianOptionalContact,
+            houseAddress: houseAddress.trim() || "Not Provided",
+            emergencyContactName: emergencyContactName.trim() || "Not Provided",
+            emergencyContactRelationship: emergencyRelationship.trim() || "Guardian",
+            emergencyContactPhone: emergencyPhone.trim() || "Not Provided",
+            previousAcademicHistory,
+            healthRecords,
+          }),
+        });
+
+        await loadDirectoryData({ classes: true, students: true });
         success(`Student "${trimmedName}" has been registered successfully.`);
       }
       closeStudentModal();
@@ -1490,6 +1508,7 @@ export default function AcademicsDashboard() {
                         <CalendarDays size={15} className="text-slate-400" />
                         <input
                           type="date"
+                          title="Admission Date"
                           value={admissionDate}
                           onChange={(event) => setAdmissionDate(event.target.value)}
                           className="w-full bg-transparent text-sm text-slate-700 outline-none"
@@ -1605,6 +1624,7 @@ export default function AcademicsDashboard() {
               </div>
               <button
                 type="button"
+                title="Close"
                 onClick={() => setIsUniversalModalOpen(false)}
                 className="rounded-full p-1 text-slate-200 transition-colors hover:bg-slate-700 hover:text-white"
               >
@@ -1986,6 +2006,7 @@ export default function AcademicsDashboard() {
                   <label className="text-sm font-medium text-gray-700">{activeModalTitle === "Home Work" ? "Deadline" : "Date"}</label>
                   <input
                     type="date"
+                    title="Date"
                     value={genericDate}
                     onChange={(e) => setGenericDate(e.target.value)}
                     className="w-full rounded-lg border border-gray-200 p-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-600"
