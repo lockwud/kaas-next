@@ -14,6 +14,8 @@ import { SchoolClass } from "../../../types/school";
 import { useToast } from "@/hooks/useToast";
 import { ApiRequestError, apiRequest } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/lib/api-endpoints";
+import { getRoleKey } from "@/lib/auth-session";
+import { createSubjectRecord, loadSubjects, saveSubjects } from "@/lib/subjects-storage";
 
 const normalize = (value: string) => value.trim().toLowerCase();
 const ACADEMIC_YEAR_START_MONTH = 7; // August
@@ -118,6 +120,30 @@ interface UserApi {
   fullName: string;
   role: string;
 }
+
+const mergeSubjects = (primary: SubjectApi[], secondary: SubjectApi[]) => {
+  const merged: SubjectApi[] = [];
+  const seen = new Set<string>();
+
+  const getKey = (item: SubjectApi) => {
+    if (item.id) {
+      return `id:${item.id}`;
+    }
+    const label = normalize(item.name ?? item.title ?? "");
+    return label ? `name:${label}` : "";
+  };
+
+  const pushIfNew = (item: SubjectApi) => {
+    const key = getKey(item);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    merged.push(item);
+  };
+
+  primary.forEach(pushIfNew);
+  secondary.forEach(pushIfNew);
+  return merged;
+};
 
 interface DirectoryLoadOptions {
   classes?: boolean;
@@ -337,9 +363,33 @@ export default function AcademicsDashboard() {
       }
 
       if (subjectsPayload) {
-        setManagedSubjects(subjectsPayload);
+        const localSubjects = loadSubjects().map((subject) => ({
+          id: subject.id,
+          name: subject.name,
+          title: subject.name,
+        }));
+        setManagedSubjects(mergeSubjects(subjectsPayload, localSubjects));
+      } else if (shouldLoadSubjects) {
+        const localSubjects = loadSubjects().map((subject) => ({
+          id: subject.id,
+          name: subject.name,
+          title: subject.name,
+        }));
+        if (localSubjects.length > 0) {
+          setManagedSubjects(mergeSubjects([], localSubjects));
+        }
       }
     } catch (err) {
+      if (shouldLoadSubjects) {
+        const localSubjects = loadSubjects().map((subject) => ({
+          id: subject.id,
+          name: subject.name,
+          title: subject.name,
+        }));
+        if (localSubjects.length > 0) {
+          setManagedSubjects(mergeSubjects([], localSubjects));
+        }
+      }
       errorRef.current(err instanceof Error ? err.message : "Unable to load academics records.");
     }
   }, []);
@@ -768,6 +818,25 @@ export default function AcademicsDashboard() {
       closeSubjectModal();
     } catch (err) {
       if (err instanceof ApiRequestError && err.status === 403) {
+        if (getRoleKey() === "proprietor") {
+          const stored = loadSubjects();
+          const record = createSubjectRecord({
+            name: subjectName.trim(),
+            code: subjectCode.trim(),
+            category: subjectCategory,
+            status: subjectStatus,
+            classId: subjectAssignmentMode === "specific" ? subjectClassId : undefined,
+            teacherId: subjectTeacherAssignmentMode === "now" ? subjectTeacherId : undefined,
+            description: subjectDescription.trim() || undefined,
+          });
+          saveSubjects([...stored, record]);
+          setManagedSubjects((current) =>
+            mergeSubjects(current, [{ id: record.id, name: record.name, title: record.name }]),
+          );
+          success(`Subject "${record.name}" has been created successfully.`);
+          closeSubjectModal();
+          return;
+        }
         setSubjectErrorMessage("Forbidden: server denied subject creation for this account.");
         return;
       }

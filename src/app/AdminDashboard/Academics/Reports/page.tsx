@@ -4,75 +4,616 @@ import React from "react";
 import DashboardLayout from "../../../../components/DashboardLayout";
 import { Button } from "../../../../components/ui/Button";
 import { Select } from "../../../../components/ui/Select";
-import { Table } from "../../../../components/ui/Table";
 import { motion } from "framer-motion";
-import { getStudentName, reports } from "../../../../lib/school-data";
-import { Mail, MessageCircle, FileDown } from "lucide-react";
+import Image from "next/image";
+import { Eye, FileDown, Search } from "lucide-react";
 
-interface ReportRow {
+const ASSESSMENT_RECORDS_STORAGE_KEY = "kaas_assessment_records";
+const REPORT_STATUS_STORAGE_KEY = "kaas_terminal_report_status";
+
+type AssessmentStoredRecord = {
   id: string;
-  student: string;
-  className: string;
-  term: string;
-  scorePercent: string;
+  classId: string;
+  className?: string;
+  section?: string;
+  subject: string;
+  term: "first_term" | "second_term" | "third_term";
+  academicYear: string;
+  rows: Array<{
+    studentId: string;
+    studentName: string;
+    classExercise: number;
+    homeworkProject: number;
+    exam: number;
+    total: number;
+  }>;
+  savedAt: string;
+};
+
+type ReportStatusMap = Record<string, { printedAt?: string }>;
+
+type ReportSubjectRow = {
+  subject: string;
+  score?: number;
   grade: string;
-  channels: string;
-}
+  remark: string;
+};
+
+type ReportCard = {
+  id: string;
+  studentId: string;
+  studentName: string;
+  classLabel: string;
+  classId: string;
+  term: "first_term" | "second_term" | "third_term";
+  academicYear: string;
+  subjects: ReportSubjectRow[];
+  overallScore: number;
+  overallGrade: string;
+  attendance: { present: number; total: number; percent: number };
+  summary: string;
+  behavior: string;
+  discipline: string;
+  ready: boolean;
+  printedAt?: string;
+};
+
+const loadAssessmentRecords = (): AssessmentStoredRecord[] => {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(window.localStorage.getItem(ASSESSMENT_RECORDS_STORAGE_KEY) ?? "[]") as AssessmentStoredRecord[];
+  } catch {
+    return [];
+  }
+};
+
+const loadReportStatus = (): ReportStatusMap => {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(window.localStorage.getItem(REPORT_STATUS_STORAGE_KEY) ?? "{}") as ReportStatusMap;
+  } catch {
+    return {};
+  }
+};
+
+const saveReportStatus = (value: ReportStatusMap) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(REPORT_STATUS_STORAGE_KEY, JSON.stringify(value));
+};
+
+const formatTerm = (term: "first_term" | "second_term" | "third_term") =>
+  term.replace("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
+
+const scoreToGrade = (score: number) => {
+  if (score >= 85) return "A";
+  if (score >= 75) return "B";
+  if (score >= 65) return "C";
+  if (score >= 50) return "D";
+  if (score >= 40) return "E";
+  return "F";
+};
+
+const scoreToRemark = (score: number) => {
+  if (score >= 85) return "Excellent";
+  if (score >= 75) return "Very Good";
+  if (score >= 65) return "Good";
+  if (score >= 50) return "Fair";
+  if (score >= 40) return "Needs Improvement";
+  return "Poor";
+};
+
+const scoreToSummary = (score: number) => {
+  if (score >= 85) return "Outstanding performance across all subjects.";
+  if (score >= 75) return "Very strong performance with consistent results.";
+  if (score >= 65) return "Good performance with room for improvement.";
+  if (score >= 50) return "Fair performance; improvement is required.";
+  if (score >= 40) return "Below average performance; needs support.";
+  return "Poor performance; urgent support required.";
+};
+
+const scoreToBehavior = (score: number) => {
+  if (score >= 85) return "Outstanding";
+  if (score >= 75) return "Very Good";
+  if (score >= 65) return "Good";
+  if (score >= 50) return "Fair";
+  if (score >= 40) return "Needs Improvement";
+  return "Poor";
+};
+
+const scoreToDiscipline = (score: number) => {
+  if (score >= 85) return "Exemplary";
+  if (score >= 75) return "Very Good";
+  if (score >= 65) return "Good";
+  if (score >= 50) return "Satisfactory";
+  if (score >= 40) return "Needs Improvement";
+  return "Poor";
+};
+
+const scoreToAttendance = (score: number) => {
+  const total = 90;
+  const present = Math.max(0, Math.min(total, Math.round((score / 100) * total)));
+  const percent = Math.round((present / total) * 100);
+  return { present, total, percent };
+};
+
+const buildReportKey = (studentId: string, classId: string, term: string, academicYear: string) =>
+  `${studentId}|${classId}|${term}|${academicYear}`;
 
 export default function ReportsPage() {
-  const rows: ReportRow[] = reports
-    .map((report) => ({
-      id: report.id,
-      student: getStudentName(report.studentId),
-      className: report.className,
-      term: report.term.replace("_", " "),
-      scorePercent: `${report.scorePercent}%`,
-      grade: report.grade,
-      channels: report.deliveryChannels.join(", "),
-    }));
+  const [assessmentRecords, setAssessmentRecords] = React.useState<AssessmentStoredRecord[]>([]);
+  const [classFilter, setClassFilter] = React.useState<string>("all");
+  const [termFilter, setTermFilter] = React.useState<"all" | "first_term" | "second_term" | "third_term">("all");
+  const [studentSearch, setStudentSearch] = React.useState("");
+  const [selectedReportIds, setSelectedReportIds] = React.useState<string[]>([]);
+  const [activeReport, setActiveReport] = React.useState<ReportCard | null>(null);
+  const [reportStatus, setReportStatus] = React.useState<ReportStatusMap>({});
+
+  React.useEffect(() => {
+    setAssessmentRecords(loadAssessmentRecords());
+    setReportStatus(loadReportStatus());
+  }, []);
+
+  const classOptions = React.useMemo(() => {
+    const map = new Map<string, { id: string; label: string }>();
+    assessmentRecords.forEach((record) => {
+      const label = `${record.className ?? "Class"}${record.section ?? ""}`.trim();
+      if (!map.has(record.classId)) {
+        map.set(record.classId, { id: record.classId, label });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [assessmentRecords]);
+
+  const filteredRecords = React.useMemo(() => {
+    return assessmentRecords.filter((record) => {
+      if (classFilter !== "all" && record.classId !== classFilter) return false;
+      if (termFilter !== "all" && record.term !== termFilter) return false;
+      return true;
+    });
+  }, [assessmentRecords, classFilter, termFilter]);
+
+  const reportCards = React.useMemo(() => {
+    if (filteredRecords.length === 0) return [] as ReportCard[];
+
+    const subjectMap = new Map<string, Set<string>>();
+    filteredRecords.forEach((record) => {
+      const key = `${record.classId}|${record.term}|${record.academicYear}`;
+      const set = subjectMap.get(key) ?? new Set<string>();
+      set.add(record.subject);
+      subjectMap.set(key, set);
+    });
+
+    const studentMap = new Map<
+      string,
+      {
+        studentName: string;
+        classLabel: string;
+        subjectScores: Map<string, { score: number; savedAt: string }>;
+        term: "first_term" | "second_term" | "third_term";
+        academicYear: string;
+        classId: string;
+        studentId: string;
+      }
+    >();
+
+    filteredRecords.forEach((record) => {
+      const classLabel = `${record.className ?? "Class"}${record.section ?? ""}`.trim();
+      record.rows.forEach((row) => {
+        const studentKey = `${row.studentId}|${record.term}|${record.academicYear}`;
+        if (!studentMap.has(studentKey)) {
+          studentMap.set(studentKey, {
+            studentId: row.studentId,
+            studentName: row.studentName,
+            classLabel,
+            subjectScores: new Map(),
+            term: record.term,
+            academicYear: record.academicYear,
+            classId: record.classId,
+          });
+        }
+        const entry = studentMap.get(studentKey);
+        if (!entry) return;
+        const existing = entry.subjectScores.get(record.subject);
+        if (!existing || new Date(record.savedAt).getTime() >= new Date(existing.savedAt).getTime()) {
+          entry.subjectScores.set(record.subject, { score: row.total, savedAt: record.savedAt });
+        }
+      });
+    });
+
+    return Array.from(studentMap.entries()).map(([_, data]) => {
+      const subjectKey = `${data.classId}|${data.term}|${data.academicYear}`;
+      const requiredSubjects = Array.from(subjectMap.get(subjectKey) ?? []).sort((a, b) =>
+        a.localeCompare(b, undefined, { sensitivity: "base" }),
+      );
+
+      const subjectRows: ReportSubjectRow[] = requiredSubjects.map((subject) => {
+        const scoreEntry = data.subjectScores.get(subject);
+        if (!scoreEntry) {
+          return {
+            subject,
+            grade: "-",
+            remark: "Pending",
+          };
+        }
+        const score = scoreEntry.score;
+        return {
+          subject,
+          score,
+          grade: scoreToGrade(score),
+          remark: scoreToRemark(score),
+        };
+      });
+
+      const scores = subjectRows.filter((row) => typeof row.score === "number").map((row) => row.score as number);
+      const overallScore = scores.length > 0 ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length) : 0;
+      const overallGrade = scoreToGrade(overallScore);
+      const attendance = scoreToAttendance(overallScore);
+      const ready = requiredSubjects.length > 0 && requiredSubjects.every((subject) => data.subjectScores.has(subject));
+      const reportKey = buildReportKey(data.studentId, data.classId, data.term, data.academicYear);
+      const status = reportStatus[reportKey];
+
+      return {
+        id: reportKey,
+        studentId: data.studentId,
+        studentName: data.studentName,
+        classLabel: data.classLabel,
+        classId: data.classId,
+        term: data.term,
+        academicYear: data.academicYear,
+        subjects: subjectRows,
+        overallScore,
+        overallGrade,
+        attendance,
+        summary: scoreToSummary(overallScore),
+        behavior: scoreToBehavior(overallScore),
+        discipline: scoreToDiscipline(overallScore),
+        ready,
+        printedAt: status?.printedAt,
+      };
+    });
+  }, [filteredRecords, reportStatus]);
+
+  const filteredStudents = React.useMemo(() => {
+    const query = studentSearch.trim().toLowerCase();
+    return reportCards
+      .filter((card) => (query ? card.studentName.toLowerCase().includes(query) : true))
+      .map((card) => ({
+        id: card.id,
+        name: card.studentName,
+        classLabel: card.classLabel,
+        term: formatTerm(card.term),
+      }));
+  }, [reportCards, studentSearch]);
+
+  React.useEffect(() => {
+    setSelectedReportIds(filteredStudents.map((student) => student.id));
+  }, [filteredStudents]);
+
+  const displayedCards = reportCards.filter((card) => selectedReportIds.includes(card.id));
+
+  const markPrinted = (card: ReportCard) => {
+    const updated = { ...reportStatus, [card.id]: { printedAt: new Date().toISOString() } };
+    setReportStatus(updated);
+    saveReportStatus(updated);
+  };
 
   return (
     <DashboardLayout>
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800">Terminal Report Center</h2>
-          <p className="text-gray-500 text-sm mt-1">
-            Generate term reports and deliver through WhatsApp, email, or direct PDF download.
-          </p>
+      <style jsx global>{`
+        @page {
+          size: auto;
+          margin: 12mm;
+        }
+
+        @media print {
+          body {
+            background: #ffffff !important;
+          }
+
+          .print-overlay,
+          .print-actions {
+            display: none !important;
+          }
+
+          .print-modal {
+            position: static !important;
+            inset: auto !important;
+            width: 100% !important;
+            max-width: none !important;
+            max-height: none !important;
+            overflow: visible !important;
+            border: none !important;
+            box-shadow: none !important;
+          }
+
+          .print-area {
+            padding: 0 !important;
+          }
+
+          .print-header {
+            border-bottom: 1px solid #e2e8f0 !important;
+          }
+        }
+      `}</style>
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-slate-900">Generate Reports ({displayedCards.length})</h2>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" className="h-9 px-3 text-xs">
+              <FileDown size={13} className="mr-1" /> Excel
+            </Button>
+            <Button className="h-9 px-3 text-xs bg-rose-600 hover:bg-rose-700">
+              <FileDown size={13} className="mr-1" /> PDF
+            </Button>
+          </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl border border-gray-100 grid md:grid-cols-4 gap-4 items-end">
-          <Select
-            label="Term"
-            options={[
-              { value: "first_term", label: "First Term" },
-              { value: "second_term", label: "Second Term" },
-              { value: "third_term", label: "Third Term" },
-            ]}
-          />
-          <Button className="w-full">
-            <MessageCircle size={15} className="mr-1" /> Send WhatsApp
-          </Button>
-          <Button className="w-full" variant="outline">
-            <Mail size={15} className="mr-1" /> Send Email
-          </Button>
-          <Button className="w-full" variant="outline">
-            <FileDown size={15} className="mr-1" /> Download PDF
-          </Button>
-        </div>
+        <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <h3 className="text-sm font-semibold text-slate-700">Reports & Filters</h3>
+            <div className="mt-4 space-y-3">
+              <Select
+                label="Class"
+                value={classFilter}
+                onChange={(e) => setClassFilter(e.target.value)}
+                options={[
+                  { value: "all", label: "All Classes" },
+                  ...classOptions.map((option) => ({ value: option.id, label: option.label })),
+                ]}
+              />
+              <Select
+                label="Term"
+                value={termFilter}
+                onChange={(e) => setTermFilter(e.target.value as typeof termFilter)}
+                options={[
+                  { value: "all", label: "All Terms" },
+                  { value: "first_term", label: "First Term" },
+                  { value: "second_term", label: "Second Term" },
+                  { value: "third_term", label: "Third Term" },
+                ]}
+              />
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={studentSearch}
+                  onChange={(e) => setStudentSearch(e.target.value)}
+                  placeholder="Search student..."
+                  className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none"
+                />
+              </div>
+            </div>
 
-        <Table
-          columns={[
-            { header: "Student", accessor: "student" },
-            { header: "Class", accessor: "className" },
-            { header: "Term", accessor: "term" },
-            { header: "Score", accessor: "scorePercent" },
-            { header: "Grade", accessor: "grade" },
-            { header: "Channels", accessor: "channels" },
-          ]}
-          data={rows}
-        />
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
+                <span>Students ({filteredStudents.length})</span>
+                <button
+                  onClick={() => setSelectedReportIds(filteredStudents.map((student) => student.id))}
+                  className="text-emerald-600 hover:text-emerald-700"
+                >
+                  Select All
+                </button>
+              </div>
+              <div className="mt-3 space-y-2">
+                {filteredStudents.length === 0 && (
+                  <p className="text-xs text-slate-400">No assessment entries yet.</p>
+                )}
+                {filteredStudents.map((student) => (
+                  <label key={student.id} className="flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-2 text-xs text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={selectedReportIds.includes(student.id)}
+                      onChange={(e) => {
+                        setSelectedReportIds((current) =>
+                          e.target.checked ? [...current, student.id] : current.filter((id) => id !== student.id),
+                        );
+                      }}
+                      className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600"
+                    />
+                    <div>
+                      <p className="font-semibold text-slate-800">{student.name}</p>
+                      <p className="text-[10px] text-slate-400">{student.classLabel} • {student.term}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {displayedCards.length === 0 && (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+                Assessment entries will appear here once they are saved for a class and term.
+              </div>
+            )}
+            {displayedCards.map((card) => (
+              <div key={card.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900">Kaas Academy</h4>
+                    <p className="text-xs text-slate-500">
+                      {card.studentName} • {card.classLabel} • {formatTerm(card.term)}
+                    </p>
+                    <p className="text-[11px] text-slate-400">Academic Year: {card.academicYear}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-semibold text-slate-700">Overall Score: {card.overallScore}%</p>
+                    <p className="text-[11px] text-slate-400">
+                      {card.ready ? "Ready for view & print" : "Waiting for remaining subjects"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-900 text-white">
+                      <tr>
+                        <th className="px-3 py-2">Subject</th>
+                        <th className="px-3 py-2">Score</th>
+                        <th className="px-3 py-2">Remarks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {card.subjects.map((row) => (
+                        <tr key={row.subject} className="border-t border-slate-100 text-slate-700">
+                          <td className="px-3 py-2">{row.subject}</td>
+                          <td className="px-3 py-2">{row.score ?? "-"}</td>
+                          <td className="px-3 py-2">{row.remark}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+                  <p>
+                    Attendance: {card.attendance.present}/{card.attendance.total} ({card.attendance.percent}%)
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      className="h-8 px-3 text-xs"
+                      onClick={() => setActiveReport(card)}
+                      disabled={!card.ready}
+                    >
+                      <Eye size={12} className="mr-1" /> View
+                    </Button>
+                    <Button
+                      className="h-8 px-3 text-xs bg-emerald-600 hover:bg-emerald-700"
+                      onClick={() => markPrinted(card)}
+                      disabled={!card.ready}
+                    >
+                      {card.printedAt ? "Printed" : "Print"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </motion.div>
+
+      {activeReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="absolute inset-0 print-overlay" onClick={() => setActiveReport(null)} />
+          <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl print-modal">
+            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4 print-header">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 overflow-hidden rounded-full border border-slate-200 bg-white">
+                  <Image src="/KAASLOGO.jpeg" alt="Kaas logo" width={40} height={40} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Kaas Academy</h3>
+                  <p className="text-xs text-slate-500">Terminal Report</p>
+                </div>
+              </div>
+              <div className="text-right text-[11px] text-slate-500">
+                <p>Academic Year: {activeReport.academicYear}</p>
+                <p>Term: {formatTerm(activeReport.term)}</p>
+              </div>
+            </div>
+
+            <div className="space-y-5 p-6 print-area">
+              <div className="rounded-lg border border-slate-200 p-4 text-xs">
+                <p className="text-[11px] font-semibold uppercase text-slate-500">Student Details</p>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-slate-700">
+                  <p>
+                    <span className="font-semibold">Student Name:</span> {activeReport.studentName}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Class:</span> {activeReport.classLabel}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Student ID:</span> {activeReport.studentId}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Attendance:</span>{" "}
+                    {activeReport.attendance.present}/{activeReport.attendance.total} ({activeReport.attendance.percent}%)
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold uppercase text-slate-500">Academic Performance</p>
+                <div className="mt-2 overflow-hidden rounded-lg border border-slate-200">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100 text-slate-600">
+                      <tr>
+                        <th className="px-3 py-2">Subject</th>
+                        <th className="px-3 py-2">Score</th>
+                        <th className="px-3 py-2">Grade</th>
+                        <th className="px-3 py-2">Remarks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeReport.subjects.map((row) => (
+                        <tr key={row.subject} className="border-t border-slate-100 text-slate-700">
+                          <td className="px-3 py-2">{row.subject}</td>
+                          <td className="px-3 py-2">{row.score ?? "-"}</td>
+                          <td className="px-3 py-2">{row.grade}</td>
+                          <td className="px-3 py-2">{row.remark}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 p-4 text-xs">
+                <p className="text-[11px] font-semibold uppercase text-slate-500">Summary & Conduct</p>
+                <div className="mt-2 grid grid-cols-2 gap-3 text-slate-700">
+                  <p>
+                    <span className="font-semibold">Overall Score:</span> {activeReport.overallScore}%
+                  </p>
+                  <p>
+                    <span className="font-semibold">Overall Grade:</span> {activeReport.overallGrade}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Behavior:</span> {activeReport.behavior}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Discipline:</span> {activeReport.discipline}
+                  </p>
+                  <p>
+                    <span className="font-semibold">Class Position:</span>
+                  </p>
+                  <p>
+                    <span className="font-semibold">Reopening Date:</span>
+                  </p>
+                </div>
+                <p className="mt-3 text-slate-600">{activeReport.summary}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6 pt-4 text-xs text-slate-600">
+                <div>
+                  <div className="h-px w-full bg-slate-300" />
+                  <p className="mt-2 text-center">Class Teacher&apos;s Signature</p>
+                </div>
+                <div>
+                  <div className="h-px w-full bg-slate-300" />
+                  <p className="mt-2 text-center">Headmaster&apos;s Signature</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4 print-actions">
+              <Button variant="outline" onClick={() => setActiveReport(null)}>
+                Close
+              </Button>
+              <Button
+                className="bg-emerald-600"
+                onClick={() => {
+                  markPrinted(activeReport);
+                  if (typeof window !== "undefined") {
+                    window.print();
+                  }
+                }}
+              >
+                Print
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

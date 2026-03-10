@@ -5,17 +5,19 @@ type AccessRule = {
   roles: AppRole[];
 };
 
+const STAFF_ROLES: AppRole[] = ["proprietor", "administrator", "headmaster", "subject_teacher", "class_teacher"];
+
 const RULES: AccessRule[] = [
-  { prefix: "/AdminDashboard/Settings", roles: ["proprietor", "administrator"] },
-  { prefix: "/AdminDashboard/Organization", roles: ["proprietor", "administrator"] },
-  { prefix: "/AdminDashboard/Billing", roles: ["proprietor", "administrator"] },
-  { prefix: "/AdminDashboard/Finance", roles: ["proprietor", "administrator"] },
-  { prefix: "/AdminDashboard/HR", roles: ["proprietor", "administrator", "headmaster"] },
+  { prefix: "/AdminDashboard/Settings", roles: STAFF_ROLES },
+  { prefix: "/AdminDashboard/Organization", roles: STAFF_ROLES },
+  { prefix: "/AdminDashboard/Billing", roles: STAFF_ROLES },
+  { prefix: "/AdminDashboard/Finance", roles: STAFF_ROLES },
+  { prefix: "/AdminDashboard/HR", roles: STAFF_ROLES },
   {
     prefix: "/AdminDashboard/Academics",
-    roles: ["proprietor", "administrator", "headmaster", "subject_teacher", "class_teacher"],
+    roles: STAFF_ROLES,
   },
-  { prefix: "/AdminDashboard/MySchool", roles: ["proprietor", "administrator", "headmaster"] },
+  { prefix: "/AdminDashboard/MySchool", roles: STAFF_ROLES },
 ];
 
 export const canAccessPath = (path: string, role: AppRole): boolean => {
