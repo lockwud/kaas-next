@@ -11,7 +11,6 @@ import { Pagination } from "../../../../components/ui/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { apiRequest } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/lib/api-endpoints";
-import { getRoleKey } from "@/lib/auth-session";
 
 type StudentRow = {
   id: string;
@@ -53,29 +52,27 @@ type ClassOption = {
   name: string;
 };
 
-// Default mock data for initial load
-const DEFAULT_STUDENTS: StudentRow[] = [
-  { id: "1", fullName: "Kwame Asante", classId: "1", className: "Form 1-A", gender: "Male", dateOfBirth: "2010-05-15", admissionDate: "2023-09-01", guardianName: "John Asante", guardianContact: "+233 24 111 1111", guardianEmail: "john.asante@email.com", address: "Accra, Ghana", email: "kwame.asante@student.edu", phone: "+233 55 123 4567" },
-  { id: "2", fullName: "Abena Mensah", classId: "2", className: "Form 1-B", gender: "Female", dateOfBirth: "2010-08-22", admissionDate: "2023-09-01", guardianName: "Mary Mensah", guardianContact: "+233 24 222 2222", guardianEmail: "mary.mensah@email.com", address: "Tema, Ghana", email: "abena.mensah@student.edu", phone: "+233 55 234 5678" },
-  { id: "3", fullName: "Kofi Osei", classId: "", className: "Assign Later", gender: "Male", dateOfBirth: "2010-03-10", admissionDate: "2024-01-15", guardianName: "David Osei", guardianContact: "+233 24 333 3333", guardianEmail: "david.osei@email.com", address: "Kumasi, Ghana", email: "kofi.osei@student.edu", phone: "+233 55 345 6789" },
-  { id: "4", fullName: "Ama Owusu", classId: "1", className: "Form 1-A", gender: "Female", dateOfBirth: "2010-11-30", admissionDate: "2023-09-01", guardianName: "Grace Owusu", guardianContact: "+233 24 444 4444", guardianEmail: "grace.owusu@email.com", address: "Takoradi, Ghana", email: "ama.owusu@student.edu", phone: "+233 55 456 7890" },
-  { id: "5", fullName: "Yaw Nkrumah", classId: "3", className: "Form 2-A", gender: "Male", dateOfBirth: "2009-07-18", admissionDate: "2022-09-01", guardianName: "Paul Nkrumah", guardianContact: "+233 24 555 5555", guardianEmail: "paul.nkrumah@email.com", address: "Cape Coast, Ghana", email: "yaw.nkrumah@student.edu", phone: "+233 55 567 8901" },
-  { id: "6", fullName: "Fatima Ali", classId: "", className: "Assign Later", gender: "Female", dateOfBirth: "2010-02-14", admissionDate: "2024-02-20", guardianName: "Mohammed Ali", guardianContact: "+233 24 666 6666", guardianEmail: "mohammed.ali@email.com", address: "Tamale, Ghana", email: "fatima.ali@student.edu", phone: "+233 55 678 9012" },
-];
+type ClassApi = {
+  id: string;
+  className?: string;
+  name?: string;
+  section?: string;
+};
 
-const DEFAULT_CLASSES: ClassOption[] = [
-  { id: "1", name: "Form 1-A" },
-  { id: "2", name: "Form 1-B" },
-  { id: "3", name: "Form 2-A" },
-  { id: "4", name: "Form 2-B" },
-  { id: "5", name: "Form 3-A" },
-];
+const mapClassOption = (item: ClassApi): ClassOption => ({
+  id: item.id,
+  name: `${item.className ?? item.name ?? "Class"}${item.section ?? ""}`.trim(),
+});
 
 const mapStudent = (item: StudentApi): StudentRow => ({
   id: item.id,
   fullName: item.fullName ?? item.name ?? "Unnamed Student",
   classId: item.classId ?? "",
-  className: item.className ? `${item.className}${item.section ?? ""}` : "Assign Later",
+  className: item.className
+    ? `${item.className ?? ""}${item.section ?? ""}`.trim()
+    : item.classId
+      ? "Assigned"
+      : "Unassigned",
   gender: (item.gender === "Male" || item.gender === "Female") ? item.gender : "Male",
   dateOfBirth: item.dateOfBirth ?? "",
   admissionDate: item.admissionDate ? new Date(item.admissionDate).toLocaleDateString() : "-",
@@ -90,20 +87,12 @@ const mapStudent = (item: StudentApi): StudentRow => ({
 export default function StudentsDirectoryPage() {
   const { success, error } = useToast();
   const [rows, setRows] = React.useState<StudentRow[]>([]);
-  const [classes, setClasses] = React.useState<ClassOption[]>(DEFAULT_CLASSES);
+  const [classes, setClasses] = React.useState<ClassOption[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [promotingId, setPromotingId] = React.useState<string | null>(null);
   const [currentPage, setCurrentPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
-  const [currentRole] = React.useState(() => getRoleKey());
-  const isClassTeacher = currentRole === "class_teacher";
   
-  // Filters
-  const [genderFilter, setGenderFilter] = React.useState<string>("");
-  const [classFilter, setClassFilter] = React.useState<string>("");
-  const [hasClassFilter, setHasClassFilter] = React.useState<string>(
-    () => (getRoleKey() === "class_teacher" ? "assigned" : "all"),
-  ); // "all", "assigned", "unassigned"
   
   // Action menu state
   const [actionMenuOpen, setActionMenuOpen] = React.useState<string | null>(null);
@@ -121,28 +110,16 @@ export default function StudentsDirectoryPage() {
   const load = async () => {
     setIsLoading(true);
     try {
-      // First try to load from localStorage
-      const stored = localStorage.getItem("kaas_students");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setRows(parsed);
-      } else {
-        // If no localStorage, try API
-        const payload = await apiRequest<StudentApi[]>(API_ENDPOINTS.students);
-        const mapped = payload.map(mapStudent);
-        setRows(mapped);
-        localStorage.setItem("kaas_students", JSON.stringify(mapped));
-      }
-      
-      // Load classes
-      const storedClasses = localStorage.getItem("kaas_classes");
-      if (storedClasses) {
-        setClasses(JSON.parse(storedClasses));
-      }
+      const [studentsPayload, classesPayload] = await Promise.all([
+        apiRequest<StudentApi[]>(API_ENDPOINTS.students),
+        apiRequest<ClassApi[]>(API_ENDPOINTS.classes),
+      ]);
+      setRows(studentsPayload.map(mapStudent));
+      setClasses(classesPayload.map(mapClassOption));
     } catch (err) {
-      // If API fails, use default mock data
-      setRows(DEFAULT_STUDENTS);
-      localStorage.setItem("kaas_students", JSON.stringify(DEFAULT_STUDENTS));
+      setRows([]);
+      setClasses([]);
+      error(err instanceof Error ? err.message : "Unable to load students.");
     } finally {
       setIsLoading(false);
     }
@@ -153,22 +130,7 @@ export default function StudentsDirectoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Filter students
-  const filteredRows = React.useMemo(() => {
-    return rows.filter(student => {
-      // Gender filter
-      if (genderFilter && student.gender !== genderFilter) return false;
-      
-      // Class filter
-      if (classFilter && student.classId !== classFilter) return false;
-      
-      // Has class filter
-      if (hasClassFilter === "assigned" && !student.classId) return false;
-      if (hasClassFilter === "unassigned" && student.classId) return false;
-      
-      return true;
-    });
-  }, [rows, genderFilter, classFilter, hasClassFilter]);
+  const filteredRows = React.useMemo(() => rows, [rows]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
@@ -201,9 +163,8 @@ export default function StudentsDirectoryPage() {
     if (!confirm("Are you sure you want to delete this student?")) return;
     
     try {
-      const updatedRows = rows.filter(s => s.id !== studentId);
-      setRows(updatedRows);
-      localStorage.setItem("kaas_students", JSON.stringify(updatedRows));
+      await apiRequest(`${API_ENDPOINTS.students}/${studentId}`, { method: "DELETE" });
+      setRows((current) => current.filter((s) => s.id !== studentId));
       success("Student deleted successfully.");
     } catch (err) {
       error("Unable to delete student.");
@@ -228,51 +189,72 @@ export default function StudentsDirectoryPage() {
     setIsAssignClassModalOpen(true);
   };
 
-  const handleAssignClass = () => {
+  const handleAssignClass = async () => {
     if (!selectedStudent || !assignClassId) return;
     
     const selectedClass = classes.find(c => c.id === assignClassId);
-    const updatedRows = rows.map(s => 
-      s.id === selectedStudent.id 
-        ? { ...s, classId: assignClassId, className: selectedClass?.name || "Unknown" }
-        : s
-    );
-    setRows(updatedRows);
-    localStorage.setItem("kaas_students", JSON.stringify(updatedRows));
-    setIsAssignClassModalOpen(false);
-    success(`Student assigned to ${selectedClass?.name}`);
-  };
-
-  const handleUpdateStudent = (updatedStudent: StudentRow) => {
-    const updatedRows = rows.map(s => 
-      s.id === updatedStudent.id ? updatedStudent : s
-    );
-    setRows(updatedRows);
-    localStorage.setItem("kaas_students", JSON.stringify(updatedRows));
-    setIsEditModalOpen(false);
-    setSelectedStudent(updatedStudent);
-    setIsDetailModalOpen(true);
-    success("Student updated successfully.");
-  };
-
-  const handleBulkAssignClass = (classId: string) => {
-    const unassignedStudents = filteredRows.filter(s => !s.classId);
-    if (unassignedStudents.length === 0) {
-      error("No unassigned students to assign.");
-      return;
+    try {
+      const updated = await apiRequest<StudentApi>(`${API_ENDPOINTS.students}/${selectedStudent.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          className: selectedClass?.name,
+        }),
+      });
+      setRows((current) => current.map((s) => (s.id === selectedStudent.id ? mapStudent(updated) : s)));
+      setIsAssignClassModalOpen(false);
+      success(`Student assigned to ${selectedClass?.name}`);
+    } catch (err) {
+      error("Unable to assign class.");
     }
-    
-    const selectedClass = classes.find(c => c.id === classId);
-    const updatedRows = rows.map(s => {
-      if (unassignedStudents.find(us => us.id === s.id)) {
-        return { ...s, classId, className: selectedClass?.name || "Unknown" };
-      }
-      return s;
-    });
-    setRows(updatedRows);
-    localStorage.setItem("kaas_students", JSON.stringify(updatedRows));
-    success(`${unassignedStudents.length} students assigned to ${selectedClass?.name}`);
   };
+
+  const handleUpdateStudent = async (updatedStudent: StudentRow) => {
+    try {
+      const original = selectedStudent;
+      const payload: Partial<{
+        fullName: string;
+        className: string;
+        section: string;
+        admissionNo: string;
+        rollNumber: string;
+        guardianPhone: string;
+      }> = {};
+
+      if (updatedStudent.fullName.trim() && updatedStudent.fullName.trim() !== original?.fullName) {
+        payload.fullName = updatedStudent.fullName.trim();
+      }
+      if (
+        updatedStudent.className &&
+        updatedStudent.className !== "Unassigned" &&
+        updatedStudent.className.trim() !== original?.className
+      ) {
+        payload.className = updatedStudent.className.trim();
+      }
+      if (
+        updatedStudent.guardianContact &&
+        updatedStudent.guardianContact !== "-" &&
+        updatedStudent.guardianContact !== original?.guardianContact
+      ) {
+        payload.guardianPhone = updatedStudent.guardianContact.trim();
+      }
+
+      const updated = await apiRequest<StudentApi>(`${API_ENDPOINTS.students}/${updatedStudent.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+      const mapped = mapStudent(updated);
+      setRows((current) => current.map((s) => (s.id === updatedStudent.id ? mapped : s)));
+      setIsEditModalOpen(false);
+      setSelectedStudent(mapped);
+      setIsDetailModalOpen(true);
+      success("Student updated successfully.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to update student.";
+      error(message);
+    }
+  };
+
+  
 
   // Close action menu when clicking outside
   React.useEffect(() => {
@@ -288,87 +270,6 @@ export default function StudentsDirectoryPage() {
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-slate-900">Students Directory</h2>
-          
-          {/* Bulk Assign Button */}
-          {filteredRows.some(s => !s.classId) && (
-            <div className="flex items-center gap-2">
-              <Select
-                className="w-40"
-                value=""
-                onChange={(e) => {
-                  if (e.target.value) handleBulkAssignClass(e.target.value);
-                }}
-                options={[
-                  { value: "", label: "Bulk Assign..." },
-                  ...classes.map(c => ({ value: c.id, label: c.name }))
-                ]}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-500 uppercase">Filter by:</span>
-          </div>
-          
-          <Select
-            className="w-32"
-            value={genderFilter}
-            onChange={(e) => setGenderFilter(e.target.value)}
-            options={[
-              { value: "", label: "All Genders" },
-              { value: "Male", label: "Male" },
-              { value: "Female", label: "Female" }
-            ]}
-          />
-          
-          <Select
-            className="w-36"
-            value={classFilter}
-            onChange={(e) => setClassFilter(e.target.value)}
-            options={[
-              { value: "", label: "All Classes" },
-              ...classes.map(c => ({ value: c.id, label: c.name }))
-            ]}
-          />
-          
-          <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1">
-            {!isClassTeacher && (
-              <button
-                onClick={() => setHasClassFilter("all")}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${hasClassFilter === "all" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
-              >
-                All
-              </button>
-            )}
-            <button
-              onClick={() => setHasClassFilter("assigned")}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${hasClassFilter === "assigned" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
-            >
-              Assigned
-            </button>
-            <button
-              onClick={() => setHasClassFilter("unassigned")}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${hasClassFilter === "unassigned" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
-            >
-              Unassigned
-            </button>
-          </div>
-          
-          {(genderFilter || classFilter || hasClassFilter !== (isClassTeacher ? "assigned" : "all")) && (
-            <button
-              onClick={() => {
-                setGenderFilter("");
-                setClassFilter("");
-                setHasClassFilter(isClassTeacher ? "assigned" : "all");
-              }}
-              className="text-xs font-medium text-red-500 hover:text-red-600"
-            >
-              Clear Filters
-            </button>
-          )}
         </div>
 
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -376,6 +277,7 @@ export default function StudentsDirectoryPage() {
             <table className="w-full border-collapse text-left">
               <thead>
                 <tr className="bg-[#0F172A] text-[11px] font-semibold uppercase tracking-wide text-white">
+                  <th className="px-4 py-3"></th>
                   <th className="px-4 py-3">Student Name</th>
                   <th className="px-4 py-3">Gender</th>
                   <th className="px-4 py-3">Class</th>
@@ -389,6 +291,7 @@ export default function StudentsDirectoryPage() {
                 {!isLoading &&
                   paginatedRows.map((student) => (
                     <tr key={student.id} className="border-t border-slate-100 text-sm text-slate-700 hover:bg-slate-50/70">
+                      <td className="px-4 py-3"></td>
                       <td className="px-4 py-3 font-medium">
                         <button 
                           onClick={() => openStudentDetail(student)}
@@ -473,7 +376,7 @@ export default function StudentsDirectoryPage() {
                   ))}
                 {!isLoading && paginatedRows.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500">
+                    <td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-500">
                       No student records found.
                     </td>
                   </tr>

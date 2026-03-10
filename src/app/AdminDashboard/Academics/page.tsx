@@ -56,6 +56,8 @@ const ASSESSMENT_EXAM_WEIGHT_MAX = 60;
 const ASSESSMENT_MODAL_DRAFT_KEY = "kaas_assessment_modal_draft";
 const ASSESSMENT_RECORDS_STORAGE_KEY = "kaas_assessment_records";
 
+const toBackendTerm = (term: "first_term" | "second_term" | "third_term") => term.toUpperCase();
+
 interface AssessmentStudentOption {
   id: string;
   fullName: string;
@@ -662,6 +664,10 @@ export default function AcademicsDashboard() {
       success(`Class "${finalClassName}" has been created successfully.`);
       closeClassModal();
     } catch (err) {
+      if (err instanceof ApiRequestError && err.status === 409) {
+        setErrorMessage("Class already exists.");
+        return;
+      }
       if (err instanceof ApiRequestError && err.status === 403) {
         setErrorMessage("Forbidden: server denied class creation for this account.");
         return;
@@ -773,6 +779,10 @@ export default function AcademicsDashboard() {
       }
       closeStudentModal();
     } catch (err) {
+      if (err instanceof ApiRequestError && err.status === 409) {
+        setStudentErrorMessage("Student already exists.");
+        return;
+      }
       if (err instanceof ApiRequestError && err.status === 403) {
         setStudentErrorMessage("Forbidden: server denied student registration for this account.");
         return;
@@ -817,6 +827,10 @@ export default function AcademicsDashboard() {
       success(`Subject "${subjectName.trim()}" has been created successfully.`);
       closeSubjectModal();
     } catch (err) {
+      if (err instanceof ApiRequestError && err.status === 409) {
+        setSubjectErrorMessage("Subject code already exists.");
+        return;
+      }
       if (err instanceof ApiRequestError && err.status === 403) {
         if (getRoleKey() === "proprietor") {
           const stored = loadSubjects();
@@ -1702,7 +1716,7 @@ export default function AcademicsDashboard() {
             </div>
 
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
                 if (isAssessmentModal) {
                   if (!genericClass) {
@@ -1719,20 +1733,17 @@ export default function AcademicsDashboard() {
                   }
 
                   const payload = {
-                    id:
-                      typeof crypto !== "undefined" && "randomUUID" in crypto
-                        ? crypto.randomUUID()
-                        : `assessment_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
                     classId: genericClass,
-                    className: selectedAssessmentClass?.className,
-                    section: selectedAssessmentClass?.section,
+                    className: selectedAssessmentClass?.className ?? "",
+                    section: selectedAssessmentClass?.section ?? "",
                     subject: genericSubject.trim(),
-                    term: getCurrentTerm(),
+                    term: toBackendTerm(getCurrentTerm()),
                     academicYear: currentAcademicYear,
+                    maxScore: ASSESSMENT_MAX_EXAM_INPUT,
                     weights: {
                       classExercise: ASSESSMENT_MAX_CLASS_EXERCISE,
                       homeworkProject: ASSESSMENT_MAX_HOMEWORK_PROJECT,
-                      exam: ASSESSMENT_EXAM_WEIGHT_MAX,
+                      exam: ASSESSMENT_MAX_EXAM_WEIGHT_MAX,
                     },
                     rows: assessmentEntries.map((entry) => ({
                       studentId: entry.studentId,
@@ -1742,24 +1753,22 @@ export default function AcademicsDashboard() {
                       exam: entry.exam,
                       total: toAssessmentTotal(entry),
                     })),
-                    savedAt: new Date().toISOString(),
+                    assessmentDate: new Date().toISOString(),
                   };
 
-                  window.localStorage.setItem("kaas_assessment_last_saved", JSON.stringify(payload));
                   try {
-                    const existing = JSON.parse(
-                      window.localStorage.getItem(ASSESSMENT_RECORDS_STORAGE_KEY) ?? "[]",
-                    ) as AssessmentStoredRecord[];
-                    window.localStorage.setItem(
-                      ASSESSMENT_RECORDS_STORAGE_KEY,
-                      JSON.stringify([payload as AssessmentStoredRecord, ...existing]),
-                    );
-                  } catch {
-                    window.localStorage.setItem(ASSESSMENT_RECORDS_STORAGE_KEY, JSON.stringify([payload]));
+                    await apiRequest(API_ENDPOINTS.assessments, {
+                      method: "POST",
+                      body: JSON.stringify(payload),
+                    });
+                    success("Assessment entry saved successfully.");
+                    setIsUniversalModalOpen(false);
+                    return;
+                  } catch (err) {
+                    const message = err instanceof Error ? err.message : "Unable to save assessment.";
+                    success(message);
+                    return;
                   }
-                  success("Assessment entry saved successfully.");
-                  setIsUniversalModalOpen(false);
-                  return;
                 }
 
                 console.log(`Creating ${activeModalTitle}:`, {

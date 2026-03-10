@@ -9,6 +9,7 @@ export const API_ENDPOINTS = {
   students: normalize(process.env.NEXT_PUBLIC_API_ENDPOINT_STUDENTS ?? "/students"),
   subjects: normalize(process.env.NEXT_PUBLIC_API_ENDPOINT_SUBJECTS ?? "/subjects"),
   assessments: normalize(process.env.NEXT_PUBLIC_API_ENDPOINT_ASSESSMENTS ?? "/assessments"),
+  reports: normalize(process.env.NEXT_PUBLIC_API_ENDPOINT_REPORTS ?? "/reports"),
   usersManagement: normalize(process.env.NEXT_PUBLIC_API_ENDPOINT_USERS_MANAGEMENT ?? "/users-management"),
   settingsHub: normalize(process.env.NEXT_PUBLIC_API_ENDPOINT_SETTINGS_HUB ?? "/settings/hub"),
 };

@@ -7,18 +7,19 @@ import { Select } from "../../../../components/ui/Select";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import { Eye, FileDown, Search } from "lucide-react";
-
-const ASSESSMENT_RECORDS_STORAGE_KEY = "kaas_assessment_records";
-const REPORT_STATUS_STORAGE_KEY = "kaas_terminal_report_status";
+import { apiRequest } from "@/lib/api-client";
+import { API_ENDPOINTS } from "@/lib/api-endpoints";
 
 type AssessmentStoredRecord = {
   id: string;
-  classId: string;
+  classId?: string;
   className?: string;
   section?: string;
   subject: string;
-  term: "first_term" | "second_term" | "third_term";
-  academicYear: string;
+  term: "FIRST_TERM" | "SECOND_TERM" | "THIRD_TERM";
+  academicYear?: string | null;
+  maxScore?: number;
+  weights?: Record<string, number>;
   rows: Array<{
     studentId: string;
     studentName: string;
@@ -27,7 +28,7 @@ type AssessmentStoredRecord = {
     exam: number;
     total: number;
   }>;
-  savedAt: string;
+  createdAt?: string;
 };
 
 type ReportStatusMap = Record<string, { printedAt?: string }>;
@@ -44,8 +45,8 @@ type ReportCard = {
   studentId: string;
   studentName: string;
   classLabel: string;
-  classId: string;
-  term: "first_term" | "second_term" | "third_term";
+  classId?: string;
+  term: "FIRST_TERM" | "SECOND_TERM" | "THIRD_TERM";
   academicYear: string;
   subjects: ReportSubjectRow[];
   overallScore: number;
@@ -58,31 +59,8 @@ type ReportCard = {
   printedAt?: string;
 };
 
-const loadAssessmentRecords = (): AssessmentStoredRecord[] => {
-  if (typeof window === "undefined") return [];
-  try {
-    return JSON.parse(window.localStorage.getItem(ASSESSMENT_RECORDS_STORAGE_KEY) ?? "[]") as AssessmentStoredRecord[];
-  } catch {
-    return [];
-  }
-};
-
-const loadReportStatus = (): ReportStatusMap => {
-  if (typeof window === "undefined") return {};
-  try {
-    return JSON.parse(window.localStorage.getItem(REPORT_STATUS_STORAGE_KEY) ?? "{}") as ReportStatusMap;
-  } catch {
-    return {};
-  }
-};
-
-const saveReportStatus = (value: ReportStatusMap) => {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(REPORT_STATUS_STORAGE_KEY, JSON.stringify(value));
-};
-
-const formatTerm = (term: "first_term" | "second_term" | "third_term") =>
-  term.replace("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
+const formatTerm = (term: "FIRST_TERM" | "SECOND_TERM" | "THIRD_TERM") =>
+  term.replace("_", " ").toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
 
 const scoreToGrade = (score: number) => {
   if (score >= 85) return "A";
@@ -136,29 +114,47 @@ const scoreToAttendance = (score: number) => {
   return { present, total, percent };
 };
 
-const buildReportKey = (studentId: string, classId: string, term: string, academicYear: string) =>
-  `${studentId}|${classId}|${term}|${academicYear}`;
+const buildReportKey = (studentId: string, className: string, term: string, academicYear: string) =>
+  `${studentId}|${className}|${term}|${academicYear}`;
 
 export default function ReportsPage() {
   const [assessmentRecords, setAssessmentRecords] = React.useState<AssessmentStoredRecord[]>([]);
   const [classFilter, setClassFilter] = React.useState<string>("all");
-  const [termFilter, setTermFilter] = React.useState<"all" | "first_term" | "second_term" | "third_term">("all");
+  const [termFilter, setTermFilter] = React.useState<"all" | "FIRST_TERM" | "SECOND_TERM" | "THIRD_TERM">("all");
   const [studentSearch, setStudentSearch] = React.useState("");
   const [selectedReportIds, setSelectedReportIds] = React.useState<string[]>([]);
   const [activeReport, setActiveReport] = React.useState<ReportCard | null>(null);
   const [reportStatus, setReportStatus] = React.useState<ReportStatusMap>({});
+  const [isLoading, setIsLoading] = React.useState(false);
 
   React.useEffect(() => {
-    setAssessmentRecords(loadAssessmentRecords());
-    setReportStatus(loadReportStatus());
+    const load = async () => {
+      setIsLoading(true);
+      try {
+        const [assessments, reports] = await Promise.all([
+          apiRequest<AssessmentStoredRecord[]>(API_ENDPOINTS.assessments),
+          apiRequest<Array<{ id: string; printedAt?: string | null }>>(API_ENDPOINTS.reports)
+        ]);
+        setAssessmentRecords(assessments);
+        const statusMap = reports.reduce<ReportStatusMap>((acc, item) => {
+          acc[item.id] = { printedAt: item.printedAt ?? undefined };
+          return acc;
+        }, {});
+        setReportStatus(statusMap);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void load();
   }, []);
 
   const classOptions = React.useMemo(() => {
     const map = new Map<string, { id: string; label: string }>();
     assessmentRecords.forEach((record) => {
       const label = `${record.className ?? "Class"}${record.section ?? ""}`.trim();
-      if (!map.has(record.classId)) {
-        map.set(record.classId, { id: record.classId, label });
+      if (!map.has(label)) {
+        map.set(label, { id: label, label });
       }
     });
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
@@ -166,7 +162,8 @@ export default function ReportsPage() {
 
   const filteredRecords = React.useMemo(() => {
     return assessmentRecords.filter((record) => {
-      if (classFilter !== "all" && record.classId !== classFilter) return false;
+      const recordClassKey = `${record.className ?? "Class"}${record.section ?? ""}`.trim();
+      if (classFilter !== "all" && recordClassKey !== classFilter) return false;
       if (termFilter !== "all" && record.term !== termFilter) return false;
       return true;
     });
@@ -177,7 +174,7 @@ export default function ReportsPage() {
 
     const subjectMap = new Map<string, Set<string>>();
     filteredRecords.forEach((record) => {
-      const key = `${record.classId}|${record.term}|${record.academicYear}`;
+      const key = `${record.className ?? "Class"}|${record.term}|${record.academicYear ?? ""}`;
       const set = subjectMap.get(key) ?? new Set<string>();
       set.add(record.subject);
       subjectMap.set(key, set);
@@ -199,7 +196,7 @@ export default function ReportsPage() {
     filteredRecords.forEach((record) => {
       const classLabel = `${record.className ?? "Class"}${record.section ?? ""}`.trim();
       record.rows.forEach((row) => {
-        const studentKey = `${row.studentId}|${record.term}|${record.academicYear}`;
+        const studentKey = `${row.studentId}|${record.term}|${record.academicYear ?? ""}`;
         if (!studentMap.has(studentKey)) {
           studentMap.set(studentKey, {
             studentId: row.studentId,
@@ -207,7 +204,7 @@ export default function ReportsPage() {
             classLabel,
             subjectScores: new Map(),
             term: record.term,
-            academicYear: record.academicYear,
+            academicYear: record.academicYear ?? "",
             classId: record.classId,
           });
         }
@@ -221,7 +218,7 @@ export default function ReportsPage() {
     });
 
     return Array.from(studentMap.entries()).map(([_, data]) => {
-      const subjectKey = `${data.classId}|${data.term}|${data.academicYear}`;
+      const subjectKey = `${data.classLabel}|${data.term}|${data.academicYear}`;
       const requiredSubjects = Array.from(subjectMap.get(subjectKey) ?? []).sort((a, b) =>
         a.localeCompare(b, undefined, { sensitivity: "base" }),
       );
@@ -249,7 +246,7 @@ export default function ReportsPage() {
       const overallGrade = scoreToGrade(overallScore);
       const attendance = scoreToAttendance(overallScore);
       const ready = requiredSubjects.length > 0 && requiredSubjects.every((subject) => data.subjectScores.has(subject));
-      const reportKey = buildReportKey(data.studentId, data.classId, data.term, data.academicYear);
+      const reportKey = buildReportKey(data.studentId, data.classLabel, data.term, data.academicYear);
       const status = reportStatus[reportKey];
 
       return {
@@ -291,10 +288,47 @@ export default function ReportsPage() {
 
   const displayedCards = reportCards.filter((card) => selectedReportIds.includes(card.id));
 
-  const markPrinted = (card: ReportCard) => {
+  const ensureReportGenerated = async (card: ReportCard) => {
+    const classLabel = card.classLabel;
+    const assessmentsForClass = assessmentRecords.filter((record) => {
+      const recordClassKey = `${record.className ?? "Class"}${record.section ?? ""}`.trim();
+      return (
+        recordClassKey === classLabel &&
+        record.term === card.term &&
+        (record.academicYear ?? "") === card.academicYear
+      );
+    });
+
+    if (assessmentsForClass.length === 0) {
+      return;
+    }
+
+    await apiRequest(`${API_ENDPOINTS.reports}/generate`, {
+      method: "POST",
+      body: JSON.stringify({
+        className: classLabel,
+        term: card.term,
+        academicYear: card.academicYear,
+        assessments: assessmentsForClass.map((record) => ({
+          subject: record.subject,
+          maxScore: record.maxScore ?? 100,
+          rows: (record.rows ?? []).map((row) => ({
+            studentId: row.studentId,
+            total: row.total
+          }))
+        }))
+      })
+    });
+  };
+
+  const markPrinted = async (card: ReportCard) => {
+    await ensureReportGenerated(card);
     const updated = { ...reportStatus, [card.id]: { printedAt: new Date().toISOString() } };
     setReportStatus(updated);
-    saveReportStatus(updated);
+    await apiRequest(`${API_ENDPOINTS.reports}/${card.id}/print`, {
+      method: "PATCH",
+      body: JSON.stringify({ printed: true })
+    });
   };
 
   return (
@@ -367,9 +401,9 @@ export default function ReportsPage() {
                 onChange={(e) => setTermFilter(e.target.value as typeof termFilter)}
                 options={[
                   { value: "all", label: "All Terms" },
-                  { value: "first_term", label: "First Term" },
-                  { value: "second_term", label: "Second Term" },
-                  { value: "third_term", label: "Third Term" },
+                  { value: "FIRST_TERM", label: "First Term" },
+                  { value: "SECOND_TERM", label: "Second Term" },
+                  { value: "THIRD_TERM", label: "Third Term" },
                 ]}
               />
               <div className="relative">
@@ -420,7 +454,12 @@ export default function ReportsPage() {
           </div>
 
           <div className="space-y-4">
-            {displayedCards.length === 0 && (
+            {isLoading && (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+                Loading assessments...
+              </div>
+            )}
+            {!isLoading && displayedCards.length === 0 && (
               <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
                 Assessment entries will appear here once they are saved for a class and term.
               </div>
@@ -601,8 +640,8 @@ export default function ReportsPage() {
               </Button>
               <Button
                 className="bg-emerald-600"
-                onClick={() => {
-                  markPrinted(activeReport);
+                onClick={async () => {
+                  await markPrinted(activeReport);
                   if (typeof window !== "undefined") {
                     window.print();
                   }
