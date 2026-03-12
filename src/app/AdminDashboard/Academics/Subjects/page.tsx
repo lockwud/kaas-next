@@ -7,7 +7,6 @@ import { Pagination } from "../../../../components/ui/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { apiRequest } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/lib/api-endpoints";
-import { loadSubjects as loadStoredSubjects } from "@/lib/subjects-storage";
 
 type SubjectRow = {
   id: string;
@@ -22,23 +21,6 @@ type SubjectApi = {
   title?: string;
   code?: string;
   category?: string;
-};
-
-const mergeSubjects = (primary: SubjectApi[], secondary: SubjectApi[]) => {
-  const merged: SubjectApi[] = [];
-  const seen = new Set<string>();
-
-  const getKey = (item: SubjectApi) => (item.id ? `id:${item.id}` : "");
-  const pushIfNew = (item: SubjectApi) => {
-    const key = getKey(item);
-    if (!key || seen.has(key)) return;
-    seen.add(key);
-    merged.push(item);
-  };
-
-  primary.forEach(pushIfNew);
-  secondary.forEach(pushIfNew);
-  return merged;
 };
 
 const toSubjectRow = (item: SubjectApi): SubjectRow => ({
@@ -57,22 +39,11 @@ export default function SubjectsPage() {
 
   const loadSubjects = async () => {
     setIsLoading(true);
-    const localSubjects = loadStoredSubjects().map((subject) => ({
-      id: subject.id,
-      name: subject.name,
-      title: subject.name,
-      code: subject.code,
-      category: subject.category,
-    }));
     try {
       const payload = await apiRequest<SubjectApi[]>(API_ENDPOINTS.subjects);
-      setRows(mergeSubjects(payload, localSubjects).map(toSubjectRow));
+      setRows(payload.map(toSubjectRow));
     } catch (err) {
-      if (localSubjects.length > 0) {
-        setRows(localSubjects.map(toSubjectRow));
-      } else {
-        error(err instanceof Error ? err.message : "Unable to load subjects.");
-      }
+      error(err instanceof Error ? err.message : "Unable to load subjects.");
     } finally {
       setIsLoading(false);
     }
@@ -94,8 +65,7 @@ export default function SubjectsPage() {
   }, [currentPage, totalPages]);
 
   return (
-    <DashboardLayout>
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+    <DashboardLayout loading={isLoading}><motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Subjects Directory</h2>
         </div>

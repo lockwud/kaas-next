@@ -9,6 +9,7 @@ import { School, Upload, Save, ChevronLeft, Globe, MapPin, Phone, Mail } from "l
 import { useToast } from "@/hooks/useToast";
 import Link from "next/link";
 import { apiRequest } from "@/lib/api-client";
+import { API_ENDPOINTS } from "@/lib/api-endpoints";
 
 export default function SchoolProfilePage() {
     const { success, error } = useToast();
@@ -28,7 +29,7 @@ export default function SchoolProfilePage() {
                 const payload = await apiRequest<{
                     school?: { name?: string; email?: string; phone?: string; address?: string };
                     custom?: { shortName?: string; website?: string; motto?: string };
-                }>("/settings/school-profile");
+                }>(API_ENDPOINTS.schoolProfile);
 
                 setName(payload.school?.name ?? "Ghana International Excellence School");
                 setShortName(payload.custom?.shortName ?? "GIES");
@@ -50,7 +51,7 @@ export default function SchoolProfilePage() {
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            await apiRequest("/settings/school-profile", {
+            await apiRequest(API_ENDPOINTS.schoolProfile, {
                 method: "PATCH",
                 body: JSON.stringify({ shortName, website, motto, address, phone, email }),
             });
@@ -63,8 +64,7 @@ export default function SchoolProfilePage() {
     };
 
     return (
-        <DashboardLayout>
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+        <DashboardLayout loading={isLoading}><motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                 {/* Breadcrumbs */}
                 <div className="flex items-center gap-2 text-sm text-slate-500">
                     <Link href="/AdminDashboard/Settings" className="hover:text-emerald-600 transition-colors flex items-center gap-1">
@@ -79,7 +79,14 @@ export default function SchoolProfilePage() {
                         <h1 className="text-2xl font-bold text-slate-900">School Profile</h1>
                         <p className="text-sm text-slate-500 mt-1">Update your institution profile information and branding.</p>
                     </div>
-                    <Button onClick={handleSave} className="bg-slate-900 text-white hover:bg-slate-800" isLoading={isSaving} disabled={isLoading}>
+                    <Button
+                        onClick={handleSave}
+                        className="bg-slate-900 text-white hover:bg-slate-800"
+                        isLoading={isSaving}
+                        loadingText="Saving..."
+                        blurOnLoading
+                        disabled={isLoading}
+                    >
                         <Save size={18} className="mr-2" /> Save Changes
                     </Button>
                 </div>

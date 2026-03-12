@@ -240,8 +240,7 @@ export default function OrganizationPage() {
   const schoolName = summary?.school.name ?? "School";
 
   return (
-    <DashboardLayout>
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 pb-12">
+    <DashboardLayout loading={isLoading}><motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 pb-12">
         <div className="rounded-2xl border border-slate-200 bg-linear-to-br from-indigo-900 via-slate-900 to-indigo-950 p-8 text-white shadow-xl relative overflow-hidden">
           <div className="absolute top-0 right-0 p-8 opacity-10">
             <Building2 size={160} />
@@ -375,7 +374,15 @@ export default function OrganizationPage() {
 
                 <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
                   <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-                  <Button type="submit" className="bg-indigo-600 text-white hover:bg-indigo-700 font-bold px-8" isLoading={isSaving}>Create Branch</Button>
+                  <Button
+                    type="submit"
+                    className="bg-indigo-600 text-white hover:bg-indigo-700 font-bold px-8"
+                    isLoading={isSaving}
+                    loadingText="Saving..."
+                    blurOnLoading
+                  >
+                    Create Branch
+                  </Button>
                 </div>
               </form>
             </motion.div>
@@ -435,7 +442,13 @@ export default function OrganizationPage() {
 
                 <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
                   <Button type="button" variant="outline" onClick={() => setIsManageModalOpen(false)}>Dismiss</Button>
-                  <Button type="submit" className="bg-slate-900 text-white hover:bg-slate-800 font-bold px-8" isLoading={isSaving}>
+                  <Button
+                    type="submit"
+                    className="bg-slate-900 text-white hover:bg-slate-800 font-bold px-8"
+                    isLoading={isSaving}
+                    loadingText="Saving..."
+                    blurOnLoading
+                  >
                     <Check size={16} className="mr-2" /> Save Changes
                   </Button>
                 </div>

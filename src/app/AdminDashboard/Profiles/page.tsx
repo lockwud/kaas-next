@@ -76,8 +76,7 @@ export default function ProfilesPage() {
     };
 
     return (
-        <DashboardLayout>
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-6 pb-12">
+        <DashboardLayout loading={isLoading}><motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto space-y-6 pb-12">
                 {/* Profile Header */}
                 <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm text-center relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-32 bg-linear-to-r from-slate-900 via-slate-800 to-slate-900 opacity-5"></div>

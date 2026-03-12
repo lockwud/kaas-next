@@ -53,14 +53,25 @@ export const normalizeRoleKey = (role?: string | null): AppRole => {
   return "guest";
 };
 
+const getStorageToken = (primaryKey: string, fallbackKeys: string[]): string | null => {
+  if (!isBrowser()) return null;
+  const primary = window.localStorage.getItem(primaryKey);
+  if (primary) return primary;
+  for (const key of fallbackKeys) {
+    const value = window.localStorage.getItem(key);
+    if (value) return value;
+  }
+  return null;
+};
+
 export const getAccessToken = (): string | null => {
   if (!isBrowser()) return null;
-  return window.localStorage.getItem(ACCESS_TOKEN_KEY);
+  return getStorageToken(ACCESS_TOKEN_KEY, ["kaas_access_token", "access_token", "accessToken", "token"]);
 };
 
 export const getRefreshToken = (): string | null => {
   if (!isBrowser()) return null;
-  return window.localStorage.getItem(REFRESH_TOKEN_KEY);
+  return getStorageToken(REFRESH_TOKEN_KEY, ["kaas_refresh", "refresh_token", "refreshToken"]);
 };
 
 export const getRoleKey = (): AppRole => {

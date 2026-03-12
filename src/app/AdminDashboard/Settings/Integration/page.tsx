@@ -114,8 +114,7 @@ export default function IntegrationSettingsPage() {
     };
 
     return (
-        <DashboardLayout>
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+        <DashboardLayout loading={isLoading}><motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                 {/* Breadcrumbs */}
                 <div className="flex items-center gap-2 text-sm text-slate-500">
                     <Link href="/AdminDashboard/Settings" className="hover:text-emerald-600 transition-colors flex items-center gap-1">
@@ -191,7 +190,15 @@ export default function IntegrationSettingsPage() {
 
                             <div className="flex justify-end gap-2 pt-6 border-t border-slate-100">
                                 <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-                                <Button className="bg-emerald-600 text-white hover:bg-emerald-700 font-bold px-8" onClick={saveConfig} isLoading={isSaving}>Save Configuration</Button>
+                                <Button
+                                    className="bg-emerald-600 text-white hover:bg-emerald-700 font-bold px-8"
+                                    onClick={saveConfig}
+                                    isLoading={isSaving}
+                                    loadingText="Saving..."
+                                    blurOnLoading
+                                >
+                                    Save Configuration
+                                </Button>
                             </div>
                         </div>
                     </motion.div>

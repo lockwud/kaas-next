@@ -101,12 +101,15 @@ export default function StudentsDirectoryPage() {
   const [isDetailModalOpen, setIsDetailModalOpen] = React.useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = React.useState(false);
   const [isAssignClassModalOpen, setIsAssignClassModalOpen] = React.useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = React.useState(false);
+  const [pendingDeleteStudent, setPendingDeleteStudent] = React.useState<StudentRow | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
   const [selectedStudent, setSelectedStudent] = React.useState<StudentRow | null>(null);
   
   // Assign class form
   const [assignClassId, setAssignClassId] = React.useState("");
 
-  // Load students from localStorage or API
+  // Load students from API
   const load = async () => {
     setIsLoading(true);
     try {
@@ -158,16 +161,25 @@ export default function StudentsDirectoryPage() {
     }
   };
 
-  const deleteStudent = async (studentId: string) => {
+  const requestDeleteStudent = (student: StudentRow) => {
     setActionMenuOpen(null);
-    if (!confirm("Are you sure you want to delete this student?")) return;
-    
+    setPendingDeleteStudent(student);
+    setIsDeleteConfirmOpen(true);
+  };
+
+  const deleteStudent = async () => {
+    if (!pendingDeleteStudent) return;
+    setIsDeleting(true);
     try {
-      await apiRequest(`${API_ENDPOINTS.students}/${studentId}`, { method: "DELETE" });
-      setRows((current) => current.filter((s) => s.id !== studentId));
+      await apiRequest(`${API_ENDPOINTS.students}/${pendingDeleteStudent.id}`, { method: "DELETE" });
+      setRows((current) => current.filter((s) => s.id !== pendingDeleteStudent.id));
       success("Student deleted successfully.");
     } catch (err) {
       error("Unable to delete student.");
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteConfirmOpen(false);
+      setPendingDeleteStudent(null);
     }
   };
 
@@ -266,8 +278,7 @@ export default function StudentsDirectoryPage() {
   }, [actionMenuOpen]);
 
   return (
-    <DashboardLayout>
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+    <DashboardLayout loading={isLoading}><motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-slate-900">Students Directory</h2>
         </div>
@@ -362,7 +373,7 @@ export default function StudentsDirectoryPage() {
                               </button>
                               <hr className="my-1" />
                               <button
-                                onClick={() => deleteStudent(student.id)}
+                                onClick={() => requestDeleteStudent(student)}
                                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
                               >
                                 <Trash2 size={14} />
@@ -400,6 +411,69 @@ export default function StudentsDirectoryPage() {
           </div>
         </div>
       </motion.div>
+
+      {/* Delete Student Confirm Modal */}
+      {isDeleteConfirmOpen && pendingDeleteStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div
+            className="absolute inset-0"
+            onClick={() => {
+              if (isDeleting) return;
+              setIsDeleteConfirmOpen(false);
+              setPendingDeleteStudent(null);
+            }}
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="relative w-full max-w-md rounded-2xl border border-rose-200 bg-white shadow-2xl"
+          >
+            <div className="flex items-center justify-between border-b border-rose-100 bg-rose-50 px-6 py-4">
+              <h3 className="text-base font-bold text-rose-900">Delete Student</h3>
+              <button
+                title="Close"
+                onClick={() => {
+                  if (isDeleting) return;
+                  setIsDeleteConfirmOpen(false);
+                  setPendingDeleteStudent(null);
+                }}
+                className="rounded-full p-1.5 text-rose-500 hover:bg-rose-100 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-sm text-slate-700">
+                Are you sure you want to delete{" "}
+                <span className="font-semibold text-slate-900">{pendingDeleteStudent.fullName}</span>?
+              </p>
+              <p className="mt-2 text-xs text-slate-500">This action cannot be undone.</p>
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-white px-6 py-4">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 px-4"
+                onClick={() => {
+                  if (isDeleting) return;
+                  setIsDeleteConfirmOpen(false);
+                  setPendingDeleteStudent(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="h-10 px-4 bg-rose-600 hover:bg-rose-700"
+                onClick={() => void deleteStudent()}
+                disabled={isDeleting}
+              >
+                {isDeleting ? "Deleting..." : "Delete Student"}
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* Student Detail Modal */}
       {isDetailModalOpen && selectedStudent && (
@@ -704,7 +778,15 @@ function EditStudentModal({
 
           <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" isLoading={isSaving} className="bg-emerald-600">Save Changes</Button>
+            <Button
+              type="submit"
+              isLoading={isSaving}
+              loadingText="Saving..."
+              blurOnLoading
+              className="bg-emerald-600"
+            >
+              Save Changes
+            </Button>
           </div>
         </form>
       </motion.div>

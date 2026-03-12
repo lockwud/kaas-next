@@ -166,8 +166,7 @@ export default function MySchoolPage() {
   };
 
   return (
-    <DashboardLayout>
-      <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-6">
+    <DashboardLayout loading={isLoading}><motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-6">
         {isForbidden && (
           <div className="rounded-2xl border border-rose-200 bg-rose-50 p-8 text-center shadow-sm">
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 text-rose-600">

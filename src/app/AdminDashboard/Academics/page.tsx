@@ -14,8 +14,6 @@ import { SchoolClass } from "../../../types/school";
 import { useToast } from "@/hooks/useToast";
 import { ApiRequestError, apiRequest } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/lib/api-endpoints";
-import { getRoleKey } from "@/lib/auth-session";
-import { createSubjectRecord, loadSubjects, saveSubjects } from "@/lib/subjects-storage";
 
 const normalize = (value: string) => value.trim().toLowerCase();
 const ACADEMIC_YEAR_START_MONTH = 7; // August
@@ -123,30 +121,6 @@ interface UserApi {
   role: string;
 }
 
-const mergeSubjects = (primary: SubjectApi[], secondary: SubjectApi[]) => {
-  const merged: SubjectApi[] = [];
-  const seen = new Set<string>();
-
-  const getKey = (item: SubjectApi) => {
-    if (item.id) {
-      return `id:${item.id}`;
-    }
-    const label = normalize(item.name ?? item.title ?? "");
-    return label ? `name:${label}` : "";
-  };
-
-  const pushIfNew = (item: SubjectApi) => {
-    const key = getKey(item);
-    if (!key || seen.has(key)) return;
-    seen.add(key);
-    merged.push(item);
-  };
-
-  primary.forEach(pushIfNew);
-  secondary.forEach(pushIfNew);
-  return merged;
-};
-
 interface DirectoryLoadOptions {
   classes?: boolean;
   students?: boolean;
@@ -170,10 +144,15 @@ const toAssessmentClassKey = (className: string, section: string) => `${normaliz
 
 const toAssessmentClassLabel = (className: string, section: string) => `${className} ${section}`.trim();
 
+const toWeightedExamScore = (rawExam: number) => {
+  const clamped = Math.max(0, Math.min(ASSESSMENT_MAX_EXAM_INPUT, rawExam));
+  return Math.floor((clamped * ASSESSMENT_EXAM_WEIGHT_MAX) / ASSESSMENT_MAX_EXAM_INPUT);
+};
+
 const toAssessmentTotal = (entry: AssessmentEntryRow) =>
   Math.max(0, Math.min(ASSESSMENT_MAX_CLASS_EXERCISE, entry.classExercise)) +
   Math.max(0, Math.min(ASSESSMENT_MAX_HOMEWORK_PROJECT, entry.homeworkProject)) +
-  (Math.max(0, Math.min(ASSESSMENT_MAX_EXAM_INPUT, entry.exam)) * ASSESSMENT_EXAM_WEIGHT_MAX) / ASSESSMENT_MAX_EXAM_INPUT;
+  toWeightedExamScore(entry.exam);
 
 export default function AcademicsDashboard() {
   const { success, info, error } = useToast();
@@ -365,33 +344,11 @@ export default function AcademicsDashboard() {
       }
 
       if (subjectsPayload) {
-        const localSubjects = loadSubjects().map((subject) => ({
-          id: subject.id,
-          name: subject.name,
-          title: subject.name,
-        }));
-        setManagedSubjects(mergeSubjects(subjectsPayload, localSubjects));
+        setManagedSubjects(subjectsPayload);
       } else if (shouldLoadSubjects) {
-        const localSubjects = loadSubjects().map((subject) => ({
-          id: subject.id,
-          name: subject.name,
-          title: subject.name,
-        }));
-        if (localSubjects.length > 0) {
-          setManagedSubjects(mergeSubjects([], localSubjects));
-        }
+        setManagedSubjects([]);
       }
     } catch (err) {
-      if (shouldLoadSubjects) {
-        const localSubjects = loadSubjects().map((subject) => ({
-          id: subject.id,
-          name: subject.name,
-          title: subject.name,
-        }));
-        if (localSubjects.length > 0) {
-          setManagedSubjects(mergeSubjects([], localSubjects));
-        }
-      }
       errorRef.current(err instanceof Error ? err.message : "Unable to load academics records.");
     }
   }, []);
@@ -488,9 +445,6 @@ export default function AcademicsDashboard() {
   const [genericClass, setGenericClass] = React.useState("");
   const [genericSubject, setGenericSubject] = React.useState("");
   const [genericStudentName, setGenericStudentName] = React.useState("");
-  const [genericTerm, setGenericTerm] = React.useState("first_term");
-  const [genericScore, setGenericScore] = React.useState("");
-  const [genericGrade, setGenericGrade] = React.useState("");
   const [genericCategory, setGenericCategory] = React.useState("");
   const [genericCapacity, setGenericCapacity] = React.useState("");
   const [genericStatus, setGenericStatus] = React.useState("Active");
@@ -510,6 +464,9 @@ export default function AcademicsDashboard() {
   const [assessmentPageSize, setAssessmentPageSize] = React.useState(20);
 
   const handleAdd = (cardTitle: string) => {
+    if (cardTitle === "Terminal Reports") {
+      return;
+    }
     if (cardTitle === "Classes") {
       openClassModal();
       return;
@@ -534,9 +491,6 @@ export default function AcademicsDashboard() {
     setGenericClass("");
     setGenericSubject("");
     setGenericStudentName("");
-    setGenericTerm("first_term");
-    setGenericScore("");
-    setGenericGrade("");
     setGenericCategory("");
     setGenericCapacity("");
     setGenericStatus("Active");
@@ -832,25 +786,6 @@ export default function AcademicsDashboard() {
         return;
       }
       if (err instanceof ApiRequestError && err.status === 403) {
-        if (getRoleKey() === "proprietor") {
-          const stored = loadSubjects();
-          const record = createSubjectRecord({
-            name: subjectName.trim(),
-            code: subjectCode.trim(),
-            category: subjectCategory,
-            status: subjectStatus,
-            classId: subjectAssignmentMode === "specific" ? subjectClassId : undefined,
-            teacherId: subjectTeacherAssignmentMode === "now" ? subjectTeacherId : undefined,
-            description: subjectDescription.trim() || undefined,
-          });
-          saveSubjects([...stored, record]);
-          setManagedSubjects((current) =>
-            mergeSubjects(current, [{ id: record.id, name: record.name, title: record.name }]),
-          );
-          success(`Subject "${record.name}" has been created successfully.`);
-          closeSubjectModal();
-          return;
-        }
         setSubjectErrorMessage("Forbidden: server denied subject creation for this account.");
         return;
       }
@@ -1088,7 +1023,8 @@ export default function AcademicsDashboard() {
               title={card.title}
               compact
               onView={() => (card.path ? router.push(card.path) : console.log(`View ${card.title}`))}
-              onAdd={() => handleAdd(card.title)}
+              viewCompact={card.title === "Terminal Reports"}
+              onAdd={card.title === "Terminal Reports" ? undefined : () => handleAdd(card.title)}
             />
           </motion.div>
         ))}
@@ -1743,7 +1679,7 @@ export default function AcademicsDashboard() {
                     weights: {
                       classExercise: ASSESSMENT_MAX_CLASS_EXERCISE,
                       homeworkProject: ASSESSMENT_MAX_HOMEWORK_PROJECT,
-                      exam: ASSESSMENT_MAX_EXAM_WEIGHT_MAX,
+                      exam: ASSESSMENT_EXAM_WEIGHT_MAX,
                     },
                     rows: assessmentEntries.map((entry) => ({
                       studentId: entry.studentId,
@@ -1778,9 +1714,6 @@ export default function AcademicsDashboard() {
                   genericClass,
                   genericSubject,
                   genericStudentName,
-                  genericTerm,
-                  genericScore,
-                  genericGrade,
                   genericCategory,
                   genericCapacity,
                   genericStatus,
@@ -1883,10 +1816,10 @@ export default function AcademicsDashboard() {
                                     onChange={(value) => updateAssessmentEntry(entry.studentId, "exam", value)}
                                   />
                                   <p className="mt-1 text-[10px] text-slate-500">
-                                    = {((entry.exam * ASSESSMENT_EXAM_WEIGHT_MAX) / ASSESSMENT_MAX_EXAM_INPUT).toFixed(1)} /60
+                                    = {toWeightedExamScore(entry.exam)} /60
                                   </p>
                                 </td>
-                                <td className="px-3 py-2 font-semibold text-[#1D4ED8]">{toAssessmentTotal(entry).toFixed(2)}</td>
+                                <td className="px-3 py-2 font-semibold text-[#1D4ED8]">{toAssessmentTotal(entry)}</td>
                               </tr>
                             ))
                           ) : (
@@ -1927,7 +1860,7 @@ export default function AcademicsDashboard() {
               {!isAssessmentModal && (
                 <>
               {/* Common Fields: Student Name (for individual records) */}
-              {(activeModalTitle === "Attendance" || activeModalTitle === "Student Leaves" || activeModalTitle === "Terminal Reports") && (
+              {(activeModalTitle === "Attendance" || activeModalTitle === "Student Leaves") && (
                 <Input
                   label="Student Name"
                   value={genericStudentName}
@@ -1938,7 +1871,7 @@ export default function AcademicsDashboard() {
               )}
 
               {/* Title / Name Field */}
-              {activeModalTitle !== "Attendance" && activeModalTitle !== "Student Leaves" && activeModalTitle !== "Terminal Reports" && activeModalTitle !== "Time Table" && (
+              {activeModalTitle !== "Attendance" && activeModalTitle !== "Student Leaves" && activeModalTitle !== "Time Table" && (
                 <Input
                   label={activeModalTitle === "Sections" ? "Section Name" : activeModalTitle === "Subjects" ? "Subject Name" : "Title / Name"}
                   value={genericTitle}
@@ -1991,25 +1924,6 @@ export default function AcademicsDashboard() {
               )}
 
               {/* Reports Specific */}
-              {activeModalTitle === "Terminal Reports" && (
-                <div className="grid grid-cols-2 gap-4">
-                  <Select
-                    label="Term"
-                    value={genericTerm}
-                    onChange={(e) => setGenericTerm(e.target.value)}
-                    options={[
-                      { value: "first_term", label: "First Term" },
-                      { value: "second_term", label: "Second Term" },
-                      { value: "third_term", label: "Third Term" },
-                    ]}
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input label="Score %" value={genericScore} onChange={(e) => setGenericScore(e.target.value)} placeholder="85" required />
-                    <Input label="Grade" value={genericGrade} onChange={(e) => setGenericGrade(e.target.value)} placeholder="A" required />
-                  </div>
-                </div>
-              )}
-
               {/* Time Table Specific */}
               {activeModalTitle === "Time Table" && (
                 <div className="grid grid-cols-2 gap-4">

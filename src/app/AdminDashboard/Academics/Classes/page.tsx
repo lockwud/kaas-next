@@ -86,8 +86,7 @@ export default function ClassesPage() {
   };
 
   return (
-    <DashboardLayout>
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+    <DashboardLayout loading={isLoading}><motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
         <h2 className="text-2xl font-bold text-slate-900">Classes Directory</h2>
 
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">

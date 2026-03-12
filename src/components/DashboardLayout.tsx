@@ -34,12 +34,14 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import { AppRole, clearAuthSession, getAccessToken, getRoleKey } from "@/lib/auth-session";
 import { canAccessPath } from "@/lib/rbac";
+import { LoadingOverlay } from "./ui/LoadingIndicator";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
+  loading?: boolean;
 }
 
-export default function DashboardLayout({ children }: DashboardLayoutProps) {
+export default function DashboardLayout({ children, loading = false }: DashboardLayoutProps) {
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = React.useState(false);
@@ -49,6 +51,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [profileName, setProfileName] = React.useState("User");
   const [profileRole, setProfileRole] = React.useState("General Manager");
   const [profileSchool, setProfileSchool] = React.useState("Kaas Montessori School");
+  const [routeLoading, setRouteLoading] = React.useState(false);
+  const [displayLoading, setDisplayLoading] = React.useState(false);
+  const loadingStartedAtRef = React.useRef(0);
+  const routeTimerRef = React.useRef<number | null>(null);
   const pathname = usePathname();
   const profileMenuRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -189,6 +195,37 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     setCurrentRole(role);
     setIsAccessDenied(!canAccessPath(pathname, role));
   }, [isAuthReady, pathname]);
+
+  React.useEffect(() => {
+    setRouteLoading(true);
+    if (routeTimerRef.current) {
+      window.clearTimeout(routeTimerRef.current);
+    }
+    routeTimerRef.current = window.setTimeout(() => {
+      setRouteLoading(false);
+    }, 350);
+    return () => {
+      if (routeTimerRef.current) {
+        window.clearTimeout(routeTimerRef.current);
+      }
+    };
+  }, [pathname]);
+
+  React.useEffect(() => {
+    const shouldShow = loading || routeLoading;
+    if (shouldShow) {
+      loadingStartedAtRef.current = Date.now();
+      setDisplayLoading(true);
+      return;
+    }
+
+    const elapsed = Date.now() - loadingStartedAtRef.current;
+    const remaining = Math.max(0, 350 - elapsed);
+    const timer = window.setTimeout(() => {
+      setDisplayLoading(false);
+    }, remaining);
+    return () => window.clearTimeout(timer);
+  }, [loading, routeLoading]);
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -603,6 +640,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </header>
 
         <main className="relative overflow-y-auto h-full p-8">
+          <LoadingOverlay show={displayLoading && !isAccessDenied} label="Loading" />
           {isAccessDenied ? (
             <div className="mx-auto flex h-full max-w-3xl items-center justify-center">
               <div className="w-full rounded-2xl border border-rose-200 bg-rose-50 p-8 text-center shadow-sm">
