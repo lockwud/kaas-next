@@ -805,11 +805,14 @@ export default function AcademicsDashboard() {
       return [];
     }
 
+    const targetClassName = normalize(selectedAssessmentClass.className);
+    const targetSection = selectedAssessmentClass.section ? normalize(selectedAssessmentClass.section) : "";
+
     return assessmentStudents
       .filter(
         (student) =>
-          normalize(student.className) === normalize(selectedAssessmentClass.className) &&
-          normalize(student.section) === normalize(selectedAssessmentClass.section),
+          normalize(student.className) === targetClassName &&
+          (targetSection === "" ? !student.section || normalize(student.section) === "" : normalize(student.section) === targetSection),
       )
       .sort((a, b) => a.fullName.localeCompare(b.fullName));
   }, [assessmentStudents, selectedAssessmentClass]);
@@ -1671,7 +1674,7 @@ export default function AcademicsDashboard() {
                   const payload = {
                     classId: genericClass,
                     className: selectedAssessmentClass?.className ?? "",
-                    section: selectedAssessmentClass?.section ?? "",
+                    ...(selectedAssessmentClass?.section ? { section: selectedAssessmentClass.section } : {}),
                     subject: genericSubject.trim(),
                     term: toBackendTerm(getCurrentTerm()),
                     academicYear: currentAcademicYear,
