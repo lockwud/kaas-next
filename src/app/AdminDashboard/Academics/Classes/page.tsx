@@ -23,7 +23,6 @@ type ClassApi = {
   className?: string;
   name?: string;
   section?: string;
-  classTeacherName?: string;
   classTeacher?: { fullName?: string };
   studentsCount?: number;
 };
@@ -32,7 +31,7 @@ const mapClass = (item: ClassApi): ClassRow => ({
   id: item.id,
   className: item.className ?? item.name ?? "Unnamed Class",
   section: item.section ?? "-",
-  classTeacher: item.classTeacherName ?? item.classTeacher?.fullName ?? "Unassigned",
+  classTeacher: item.classTeacher?.fullName ?? "Unassigned",
   students: item.studentsCount ?? 0,
 });
 

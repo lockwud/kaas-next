@@ -177,7 +177,7 @@ export default function AcademicsDashboard() {
   const [subjectName, setSubjectName] = React.useState("");
   const [subjectCode, setSubjectCode] = React.useState("");
   const [subjectCategory, setSubjectCategory] = React.useState<"Core" | "Elective">("Core");
-  const [subjectStatus, setSubjectStatus] = React.useState<"Active" | "Inactive">("Active");
+  const [subjectStatus, setSubjectStatus] = React.useState<"ACTIVE" | "INACTIVE">("ACTIVE");
   const [subjectAssignmentMode, setSubjectAssignmentMode] = React.useState<"all" | "specific">("all");
   const [subjectClassId, setSubjectClassId] = React.useState("");
   const [subjectTeacherAssignmentMode, setSubjectTeacherAssignmentMode] = React.useState<"later" | "now">("later");
@@ -409,7 +409,7 @@ export default function AcademicsDashboard() {
     setSubjectName("");
     setSubjectCode("");
     setSubjectCategory("Core");
-    setSubjectStatus("Active");
+    setSubjectStatus("ACTIVE");
     setSubjectAssignmentMode("all");
     setSubjectClassId("");
     setSubjectTeacherAssignmentMode("later");
@@ -1346,10 +1346,10 @@ export default function AcademicsDashboard() {
                 <Select
                   label="Status"
                   value={subjectStatus}
-                  onChange={(event) => setSubjectStatus(event.target.value as "Active" | "Inactive")}
+                  onChange={(event) => setSubjectStatus(event.target.value as "ACTIVE" | "INACTIVE")}
                   options={[
-                    { value: "Active", label: "Active" },
-                    { value: "Inactive", label: "Inactive" },
+                    { value: "ACTIVE", label: "Active" },
+                    { value: "INACTIVE", label: "Inactive" },
                   ]}
                 />
                 <Input
