@@ -21,6 +21,7 @@ type AssessmentStoredRecord = {
   academicYear?: string | null;
   maxScore?: number;
   weights?: Record<string, number>;
+  savedAt?: string;
   rows: Array<{
     studentId: string;
     studentName: string;
@@ -47,7 +48,7 @@ type ReportCard = {
   studentName: string;
   classLabel: string;
   classId?: string;
-  term: "FIRST_TERM" | "SECOND_TERM" | "THIRD_TERM";
+  term: "first_term" | "second_term" | "third_term";
   academicYear: string;
   subjects: ReportSubjectRow[];
   overallScore: number;
@@ -60,7 +61,7 @@ type ReportCard = {
   printedAt?: string;
 };
 
-const formatTerm = (term: "FIRST_TERM" | "SECOND_TERM" | "THIRD_TERM") =>
+const formatTerm = (term: "FIRST_TERM" | "SECOND_TERM" | "THIRD_TERM" | "first_term" | "second_term" | "third_term") =>
   term.replace("_", " ").toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
 
 const scoreToGrade = (score: number) => {
@@ -121,7 +122,7 @@ const buildReportKey = (studentId: string, className: string, term: string, acad
 export default function ReportsPage() {
   const [assessmentRecords, setAssessmentRecords] = React.useState<AssessmentStoredRecord[]>([]);
   const [classFilter, setClassFilter] = React.useState<string>("all");
-  const [termFilter, setTermFilter] = React.useState<"all" | "FIRST_TERM" | "SECOND_TERM" | "THIRD_TERM">("all");
+  const [termFilter, setTermFilter] = React.useState<"all" | "first_term" | "second_term" | "third_term">("all");
   const [studentSearch, setStudentSearch] = React.useState("");
   const [selectedReportIds, setSelectedReportIds] = React.useState<string[]>([]);
   const [activeReport, setActiveReport] = React.useState<ReportCard | null>(null);
@@ -169,7 +170,7 @@ export default function ReportsPage() {
     return assessmentRecords.filter((record) => {
       const recordClassKey = `${record.className ?? "Class"}${record.section ?? ""}`.trim();
       if (classFilter !== "all" && recordClassKey !== classFilter) return false;
-      if (termFilter !== "all" && record.term !== termFilter) return false;
+      if (termFilter !== "all" && record.term.toLowerCase() !== termFilter.toLowerCase()) return false;
       return true;
     });
   }, [assessmentRecords, classFilter, termFilter]);
@@ -208,16 +209,16 @@ export default function ReportsPage() {
             studentName: row.studentName,
             classLabel,
             subjectScores: new Map(),
-            term: record.term,
+            term: record.term.toLowerCase() as "first_term" | "second_term" | "third_term",
             academicYear: record.academicYear ?? "",
-            classId: record.classId,
+            classId: record.classId ?? "",
           });
         }
         const entry = studentMap.get(studentKey);
         if (!entry) return;
         const existing = entry.subjectScores.get(record.subject);
-        if (!existing || new Date(record.savedAt).getTime() >= new Date(existing.savedAt).getTime()) {
-          entry.subjectScores.set(record.subject, { score: row.total, savedAt: record.savedAt });
+        if (!existing || (record.savedAt && new Date(record.savedAt).getTime() >= new Date(existing.savedAt).getTime())) {
+          entry.subjectScores.set(record.subject, { score: row.total, savedAt: record.savedAt ?? "" });
         }
       });
     });
@@ -332,7 +333,7 @@ export default function ReportsPage() {
       const recordClassKey = `${record.className ?? "Class"}${record.section ?? ""}`.trim();
       return (
         recordClassKey === classLabel &&
-        record.term === card.term &&
+        record.term.toLowerCase() === card.term &&
         (record.academicYear ?? "") === card.academicYear
       );
     });
