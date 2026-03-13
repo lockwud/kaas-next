@@ -3,7 +3,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { Eye, FileDown, Pencil, RefreshCw, Search, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import DashboardLayout from "../../../../components/DashboardLayout";
 import { Button } from "../../../../components/ui/Button";
 import { Input } from "../../../../components/ui/Input";
@@ -160,6 +160,13 @@ export default function AssessmentsPage() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Refresh data when navigating back to this page
+  const pathname = usePathname();
+  
+  React.useEffect(() => {
+    void load();
+  }, [pathname]);
 
   const classOptions = React.useMemo(() => {
     const options = new Set(
