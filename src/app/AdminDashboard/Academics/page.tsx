@@ -810,9 +810,21 @@ export default function AcademicsDashboard() {
 
     return assessmentStudents
       .filter(
-        (student) =>
-          normalize(student.className) === targetClassName &&
-          (targetSection === "" ? !student.section || normalize(student.section) === "" : normalize(student.section) === targetSection),
+        (student) => {
+          const studentClassName = normalize(student.className);
+          const studentSection = student.section ? normalize(student.section) : "";
+          
+          // Match class name
+          if (studentClassName !== targetClassName) return false;
+          
+          // If target has no section, match students with no/empty section
+          if (!targetSection) {
+            return !studentSection;
+          }
+          
+          // If target has section, match students with that section OR no section
+          return !studentSection || studentSection === targetSection;
+        },
       )
       .sort((a, b) => a.fullName.localeCompare(b.fullName));
   }, [assessmentStudents, selectedAssessmentClass]);

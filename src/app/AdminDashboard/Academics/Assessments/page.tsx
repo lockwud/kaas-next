@@ -117,7 +117,8 @@ export default function AssessmentsPage() {
   const [rowPage, setRowPage] = React.useState(1);
   const [rowPageSize, setRowPageSize] = React.useState(10);
 
-  const [editing, setEditing] = React.useState<AssessmentRecord | null>(null);
+  const [editingScores, setEditingScores] = React.useState(false);
+  const [scoreChanges, setScoreChanges] = React.useState<Record<string, AssessmentRow>>({});
   const [deleteTarget, setDeleteTarget] = React.useState<AssessmentRecord | null>(null);
   const [isDeleting, setIsDeleting] = React.useState(false);
 
@@ -278,26 +279,35 @@ export default function AssessmentsPage() {
     }
   };
 
-  const saveEdit = async () => {
-    if (!editing) return;
+  const saveScores = async () => {
+    if (!activeAssessment || Object.keys(scoreChanges).length === 0) return;
     try {
+      const updatedRows = activeAssessment.rows?.map((row) => {
+        const changed = scoreChanges[row.studentId];
+        if (changed) {
+          return {
+            ...row,
+            classExercise: changed.classExercise,
+            homeworkProject: changed.homeworkProject,
+            exam: changed.exam,
+            total: (changed.classExercise ?? 0) + (changed.homeworkProject ?? 0) + (changed.exam ?? 0),
+          };
+        }
+        return row;
+      });
+
       const updated = normalizeRecord(
-        await apiRequest<AssessmentRecord>(`${API_ENDPOINTS.assessments}/${editing.id}`, {
+        await apiRequest<AssessmentRecord>(`${API_ENDPOINTS.assessments}/${activeAssessment.id}`, {
           method: "PATCH",
-          body: JSON.stringify({
-            className: editing.className,
-            section: editing.section,
-            subject: editing.subject,
-            academicYear: editing.academicYear,
-            term: editing.term,
-          }),
+          body: JSON.stringify({ rows: updatedRows }),
         }),
       );
-      setRecords((current) => current.map((item) => (item.id === editing.id ? updated : item)));
-      setEditing(null);
-      success("Assessment updated.");
+      setRecords((current) => current.map((item) => (item.id === activeAssessment.id ? updated : item)));
+      setScoreChanges({});
+      setEditingScores(false);
+      success("Scores saved successfully.");
     } catch (err) {
-      error(err instanceof Error ? err.message : "Unable to update assessment.");
+      error(err instanceof Error ? err.message : "Unable to save scores.");
     }
   };
 
@@ -470,15 +480,32 @@ export default function AssessmentsPage() {
                     >
                       <Eye size={12} className="mr-1" /> {isDetailLoading ? "Loading..." : "Fetch Details"}
                     </Button>
-                    <Button variant="outline" className="h-8 px-3 text-xs" onClick={() => setEditing(activeAssessment)}>
-                      <Pencil size={12} className="mr-1" /> Edit
-                    </Button>
                     <Button
                       className="h-8 px-3 text-xs bg-rose-600 hover:bg-rose-700"
                       onClick={() => setDeleteTarget(activeAssessment)}
                     >
                       <Trash2 size={12} className="mr-1" /> Delete
                     </Button>
+                    <Button
+                      variant={editingScores ? "primary" : "outline"}
+                      className="h-8 px-3 text-xs"
+                      onClick={() => {
+                        if (editingScores) {
+                          setScoreChanges({});
+                        }
+                        setEditingScores(!editingScores);
+                      }}
+                    >
+                      <Pencil size={12} className="mr-1" /> {editingScores ? "Cancel" : "Edit Scores"}
+                    </Button>
+                    {editingScores && Object.keys(scoreChanges).length > 0 && (
+                      <Button
+                        className="h-8 px-3 text-xs bg-emerald-600 hover:bg-emerald-700"
+                        onClick={() => void saveScores()}
+                      >
+                        Save Scores
+                      </Button>
+                    )}
                   </div>
                 </div>
 
@@ -517,15 +544,95 @@ export default function AssessmentsPage() {
                             </td>
                           </tr>
                         )}
-                        {paginatedRows.map((row) => (
-                          <tr key={row.studentId} className="border-t border-slate-100 text-slate-700">
-                            <td className="px-4 py-3 font-medium">{row.studentName}</td>
-                            <td className="px-4 py-3">{row.classExercise}</td>
-                            <td className="px-4 py-3">{row.homeworkProject}</td>
-                            <td className="px-4 py-3">{row.exam}</td>
-                            <td className="px-4 py-3 font-semibold text-emerald-700">{row.total}</td>
-                          </tr>
-                        ))}
+                        {paginatedRows.map((row) => {
+                          const changed = scoreChanges[row.studentId];
+                          const currentExercise = changed?.classExercise ?? row.classExercise;
+                          const currentHomework = changed?.homeworkProject ?? row.homeworkProject;
+                          const currentExam = changed?.exam ?? row.exam;
+                          const displayTotal = (currentExercise ?? 0) + (currentHomework ?? 0) + (currentExam ?? 0);
+                          
+                          return (
+                            <tr key={row.studentId} className="border-t border-slate-100 text-slate-700">
+                              <td className="px-4 py-3 font-medium">{row.studentName}</td>
+                              <td className="px-4 py-3">
+                                {editingScores ? (
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={20}
+                                    className="w-20 rounded border border-slate-300 px-2 py-1 text-xs"
+                                    value={currentExercise ?? 0}
+                                    onChange={(e) => {
+                                      const val = Math.max(0, Math.min(20, parseFloat(e.target.value) || 0));
+                                      setScoreChanges((prev) => ({
+                                        ...prev,
+                                        [row.studentId]: {
+                                          ...row,
+                                          classExercise: val,
+                                          homeworkProject: changed?.homeworkProject ?? row.homeworkProject,
+                                          exam: changed?.exam ?? row.exam,
+                                        },
+                                      }));
+                                    }}
+                                  />
+                                ) : (
+                                  row.classExercise
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                {editingScores ? (
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={20}
+                                    className="w-20 rounded border border-slate-300 px-2 py-1 text-xs"
+                                    value={currentHomework ?? 0}
+                                    onChange={(e) => {
+                                      const val = Math.max(0, Math.min(20, parseFloat(e.target.value) || 0));
+                                      setScoreChanges((prev) => ({
+                                        ...prev,
+                                        [row.studentId]: {
+                                          ...row,
+                                          classExercise: changed?.classExercise ?? row.classExercise,
+                                          homeworkProject: val,
+                                          exam: changed?.exam ?? row.exam,
+                                        },
+                                      }));
+                                    }}
+                                  />
+                                ) : (
+                                  row.homeworkProject
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                {editingScores ? (
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={100}
+                                    className="w-20 rounded border border-slate-300 px-2 py-1 text-xs"
+                                    value={currentExam ?? 0}
+                                    onChange={(e) => {
+                                      const val = Math.max(0, Math.min(100, parseFloat(e.target.value) || 0));
+                                      setScoreChanges((prev) => ({
+                                        ...prev,
+                                        [row.studentId]: {
+                                          ...row,
+                                          classExercise: changed?.classExercise ?? row.classExercise,
+                                          homeworkProject: changed?.homeworkProject ?? row.homeworkProject,
+                                          exam: val,
+                                        },
+                                      }));
+                                    }}
+                                  />
+                                ) : (
+                                  row.exam
+                                )}
+                              </td>
+                              <td className="px-4 py-3 font-semibold text-emerald-700">{displayTotal}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -548,56 +655,6 @@ export default function AssessmentsPage() {
           </div>
         </div>
       </motion.div>
-
-      {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
-          >
-            <h3 className="mb-4 text-lg font-semibold text-slate-900">Edit Assessment</h3>
-            <div className="grid gap-3 md:grid-cols-2">
-              <Input
-                label="Class"
-                value={editing.className ?? ""}
-                onChange={(event) => setEditing((current) => (current ? { ...current, className: event.target.value } : current))}
-              />
-              <Input
-                label="Section"
-                value={editing.section ?? ""}
-                onChange={(event) => setEditing((current) => (current ? { ...current, section: event.target.value } : current))}
-              />
-              <Input
-                label="Subject"
-                value={editing.subject ?? ""}
-                onChange={(event) => setEditing((current) => (current ? { ...current, subject: event.target.value } : current))}
-              />
-              <Input
-                label="Academic Year"
-                value={editing.academicYear ?? ""}
-                onChange={(event) => setEditing((current) => (current ? { ...current, academicYear: event.target.value } : current))}
-              />
-              <Select
-                label="Term"
-                value={editing.term ?? ""}
-                onChange={(event) => setEditing((current) => (current ? { ...current, term: event.target.value } : current))}
-                options={[
-                  { value: "FIRST_TERM", label: "First Term" },
-                  { value: "SECOND_TERM", label: "Second Term" },
-                  { value: "THIRD_TERM", label: "Third Term" },
-                ]}
-              />
-            </div>
-            <div className="mt-5 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
-              <Button className="bg-slate-900 text-white hover:bg-slate-800" onClick={() => void saveEdit()}>
-                Save
-              </Button>
-            </div>
-          </motion.div>
-        </div>
-      )}
 
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">

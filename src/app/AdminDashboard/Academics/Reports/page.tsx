@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { usePathname } from "next/navigation";
 import DashboardLayout from "../../../../components/DashboardLayout";
 import { Button } from "../../../../components/ui/Button";
 import { Pagination } from "../../../../components/ui/Pagination";
@@ -132,6 +133,7 @@ export default function ReportsPage() {
   const [studentPageSize, setStudentPageSize] = React.useState(10);
   const [reportPage, setReportPage] = React.useState(1);
   const [reportPageSize, setReportPageSize] = React.useState(5);
+  const pathname = usePathname();
 
   React.useEffect(() => {
     const load = async () => {
@@ -153,7 +155,7 @@ export default function ReportsPage() {
     };
 
     void load();
-  }, []);
+  }, [pathname]);
 
   const classOptions = React.useMemo(() => {
     const map = new Map<string, { id: string; label: string }>();
@@ -251,7 +253,7 @@ export default function ReportsPage() {
       const overallScore = scores.length > 0 ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length) : 0;
       const overallGrade = scoreToGrade(overallScore);
       const attendance = scoreToAttendance(overallScore);
-      const ready = requiredSubjects.length > 0 && requiredSubjects.every((subject) => data.subjectScores.has(subject));
+      const ready = scores.length > 0;
       const reportKey = buildReportKey(data.studentId, data.classLabel, data.term, data.academicYear);
       const status = reportStatus[reportKey];
 
@@ -558,7 +560,7 @@ export default function ReportsPage() {
                   <div className="text-right">
                     <p className="text-xs font-semibold text-slate-700">Overall Score: {card.overallScore}%</p>
                     <p className="text-[11px] text-slate-400">
-                      {card.ready ? "Ready for view & print" : "Waiting for remaining subjects"}
+                      {card.ready ? "Ready for view & print" : "Available subjects with assessments"}
                     </p>
                   </div>
                 </div>
