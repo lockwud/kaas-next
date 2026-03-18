@@ -285,6 +285,7 @@ export default function StudentsDirectoryPage() {
         admissionNo: string;
         rollNumber: string;
         guardianPhone: string;
+        gender: string;
       }> = {};
 
       if (updatedStudent.fullName.trim() && updatedStudent.fullName.trim() !== original?.fullName) {
@@ -303,6 +304,9 @@ export default function StudentsDirectoryPage() {
         updatedStudent.guardianContact !== original?.guardianContact
       ) {
         payload.guardianPhone = updatedStudent.guardianContact.trim();
+      }
+      if (updatedStudent.gender && updatedStudent.gender !== original?.gender) {
+        payload.gender = updatedStudent.gender;
       }
 
       const updated = await apiRequest<StudentApi>(`${API_ENDPOINTS.students}/${updatedStudent.id}`, {
@@ -336,9 +340,6 @@ export default function StudentsDirectoryPage() {
     <DashboardLayout loading={isLoading}><motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-slate-900">Students Directory</h2>
-          <Button onClick={() => setIsAddModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-700">
-            <Plus size={18} className="mr-2" /> Add Student
-          </Button>
         </div>
 
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">

@@ -51,8 +51,6 @@ const ASSESSMENT_MAX_CLASS_EXERCISE = 20;
 const ASSESSMENT_MAX_HOMEWORK_PROJECT = 20;
 const ASSESSMENT_MAX_EXAM_INPUT = 100;
 const ASSESSMENT_EXAM_WEIGHT_MAX = 60;
-const ASSESSMENT_MODAL_DRAFT_KEY = "kaas_assessment_modal_draft";
-const ASSESSMENT_RECORDS_STORAGE_KEY = "kaas_assessment_records";
 
 const toBackendTerm = (term: "first_term" | "second_term" | "third_term") => term.toUpperCase();
 
@@ -900,37 +898,6 @@ export default function AcademicsDashboard() {
     });
   }, [isUniversalModalOpen, isAssessmentModal, selectedAssessmentClass, classStudentsForAssessment]);
 
-  React.useEffect(() => {
-    if (!isUniversalModalOpen || !isAssessmentModal) {
-      return;
-    }
-
-    try {
-      const raw = window.localStorage.getItem(ASSESSMENT_MODAL_DRAFT_KEY);
-      if (!raw) {
-        return;
-      }
-
-      const draft = JSON.parse(raw) as {
-        classId?: string;
-        subject?: string;
-        rows?: AssessmentEntryRow[];
-      };
-
-      if (typeof draft.classId === "string") {
-        setGenericClass(draft.classId);
-      }
-      if (typeof draft.subject === "string") {
-        setGenericSubject(draft.subject);
-      }
-      if (Array.isArray(draft.rows)) {
-        setAssessmentEntries(draft.rows);
-      }
-    } catch {
-      // Ignore malformed draft payload.
-    }
-  }, [isUniversalModalOpen, isAssessmentModal]);
-
   const updateAssessmentEntry = (
     studentId: string,
     field: "classExercise" | "homeworkProject" | "exam",
@@ -977,18 +944,6 @@ export default function AcademicsDashboard() {
           : entry,
       ),
     );
-  };
-
-  const saveAssessmentDraft = () => {
-    window.localStorage.setItem(
-      ASSESSMENT_MODAL_DRAFT_KEY,
-      JSON.stringify({
-        classId: genericClass,
-        subject: genericSubject,
-        rows: assessmentEntries,
-      }),
-    );
-    success("Assessment draft saved.");
   };
 
   const exportAssessmentCsv = () => {
@@ -1705,19 +1660,23 @@ export default function AcademicsDashboard() {
                       total: toAssessmentTotal(entry),
                     })),
                     assessmentDate: new Date().toISOString(),
+                    savedAt: new Date().toISOString(),
                   };
 
                   try {
-                    await apiRequest(API_ENDPOINTS.assessments, {
+                    console.log("Saving assessment payload:", payload);
+                    const result = await apiRequest(API_ENDPOINTS.assessments, {
                       method: "POST",
                       body: JSON.stringify(payload),
                     });
+                    console.log("Assessment saved successfully:", result);
                     success("Assessment entry saved successfully.");
                     setIsUniversalModalOpen(false);
                     return;
                   } catch (err) {
+                    console.error("Failed to save assessment:", err);
                     const message = err instanceof Error ? err.message : "Unable to save assessment.";
-                    success(message);
+                    error(message);  // Show error message instead of success
                     return;
                   }
                 }
@@ -1779,9 +1738,6 @@ export default function AcademicsDashboard() {
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" className="h-9 px-3 text-xs" onClick={saveAssessmentDraft}>
-                      <Save size={14} className="mr-1" /> Save Draft
-                    </Button>
                     <Button type="button" variant="outline" className="h-9 px-3 text-xs" onClick={exportAssessmentCsv}>
                       <FileSpreadsheet size={14} className="mr-1" /> Export
                     </Button>

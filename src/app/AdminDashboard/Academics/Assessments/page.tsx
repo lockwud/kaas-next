@@ -93,6 +93,18 @@ const computeSummary = (rows: AssessmentRow[]) => {
   return { average, min, max };
 };
 
+// Convert exam score from 100 to 60 (same logic as when adding assessment)
+const toWeightedExamScore = (rawExam: number) => {
+  const clamped = Math.max(0, Math.min(100, rawExam));
+  return Math.floor((clamped * 60) / 100);
+};
+
+// Convert from stored weighted score (60 max) back to original 100-point scale for editing
+const fromWeightedExamScore = (storedExam: number) => {
+  if (storedExam === 0) return 0;
+  return Math.round((storedExam * 100) / 60);
+};
+
 export default function AssessmentsPage() {
   const router = useRouter();
   const { success, error } = useToast();
@@ -136,7 +148,9 @@ export default function AssessmentsPage() {
         throw assessmentsRes.reason;
       }
 
+      console.log("Assessments loaded:", assessmentsRes.value);
       const normalized = assessmentsRes.value.map(normalizeRecord);
+      console.log("Normalized assessments:", normalized);
       setRecords(normalized);
       setClasses(classesRes.status === "fulfilled" ? classesRes.value : []);
       setSubjects(subjectsRes.status === "fulfilled" ? subjectsRes.value : []);
@@ -285,12 +299,13 @@ export default function AssessmentsPage() {
       const updatedRows = activeAssessment.rows?.map((row) => {
         const changed = scoreChanges[row.studentId];
         if (changed) {
+          const convertedExam = toWeightedExamScore(changed.exam);
           return {
             ...row,
             classExercise: changed.classExercise,
             homeworkProject: changed.homeworkProject,
-            exam: changed.exam,
-            total: (changed.classExercise ?? 0) + (changed.homeworkProject ?? 0) + (changed.exam ?? 0),
+            exam: convertedExam,
+            total: (changed.classExercise ?? 0) + (changed.homeworkProject ?? 0) + convertedExam,
           };
         }
         return row;
@@ -548,7 +563,7 @@ export default function AssessmentsPage() {
                           const changed = scoreChanges[row.studentId];
                           const currentExercise = changed?.classExercise ?? row.classExercise;
                           const currentHomework = changed?.homeworkProject ?? row.homeworkProject;
-                          const currentExam = changed?.exam ?? row.exam;
+                          const currentExam = changed?.exam ?? fromWeightedExamScore(row.exam);
                           const displayTotal = (currentExercise ?? 0) + (currentHomework ?? 0) + (currentExam ?? 0);
                           
                           return (
@@ -561,16 +576,30 @@ export default function AssessmentsPage() {
                                     min="0"
                                     max={20}
                                     className="w-20 rounded border border-slate-300 px-2 py-1 text-xs"
-                                    value={currentExercise ?? 0}
+                                    value={currentExercise ?? ""}
+                                    placeholder="0"
                                     onChange={(e) => {
-                                      const val = Math.max(0, Math.min(20, parseFloat(e.target.value) || 0));
+                                      const rawValue = e.target.value;
+                                      if (rawValue === "") {
+                                        setScoreChanges((prev) => ({
+                                          ...prev,
+                                          [row.studentId]: {
+                                            ...row,
+                                            classExercise: 0,
+                                            homeworkProject: changed?.homeworkProject ?? row.homeworkProject,
+                                            exam: changed?.exam ?? fromWeightedExamScore(row.exam),
+                                          },
+                                        }));
+                                        return;
+                                      }
+                                      const val = Math.max(0, Math.min(20, parseFloat(rawValue) || 0));
                                       setScoreChanges((prev) => ({
                                         ...prev,
                                         [row.studentId]: {
                                           ...row,
                                           classExercise: val,
                                           homeworkProject: changed?.homeworkProject ?? row.homeworkProject,
-                                          exam: changed?.exam ?? row.exam,
+                                          exam: changed?.exam ?? fromWeightedExamScore(row.exam),
                                         },
                                       }));
                                     }}
@@ -586,16 +615,30 @@ export default function AssessmentsPage() {
                                     min="0"
                                     max={20}
                                     className="w-20 rounded border border-slate-300 px-2 py-1 text-xs"
-                                    value={currentHomework ?? 0}
+                                    value={currentHomework ?? ""}
+                                    placeholder="0"
                                     onChange={(e) => {
-                                      const val = Math.max(0, Math.min(20, parseFloat(e.target.value) || 0));
+                                      const rawValue = e.target.value;
+                                      if (rawValue === "") {
+                                        setScoreChanges((prev) => ({
+                                          ...prev,
+                                          [row.studentId]: {
+                                            ...row,
+                                            classExercise: changed?.classExercise ?? row.classExercise,
+                                            homeworkProject: 0,
+                                            exam: changed?.exam ?? fromWeightedExamScore(row.exam),
+                                          },
+                                        }));
+                                        return;
+                                      }
+                                      const val = Math.max(0, Math.min(20, parseFloat(rawValue) || 0));
                                       setScoreChanges((prev) => ({
                                         ...prev,
                                         [row.studentId]: {
                                           ...row,
                                           classExercise: changed?.classExercise ?? row.classExercise,
                                           homeworkProject: val,
-                                          exam: changed?.exam ?? row.exam,
+                                          exam: changed?.exam ?? fromWeightedExamScore(row.exam),
                                         },
                                       }));
                                     }}
@@ -611,9 +654,24 @@ export default function AssessmentsPage() {
                                     min="0"
                                     max={100}
                                     className="w-20 rounded border border-slate-300 px-2 py-1 text-xs"
-                                    value={currentExam ?? 0}
+                                    value={currentExam ?? ""}
+                                    placeholder="0"
                                     onChange={(e) => {
-                                      const val = Math.max(0, Math.min(100, parseFloat(e.target.value) || 0));
+                                      const rawValue = e.target.value;
+                                      if (rawValue === "") {
+                                        setScoreChanges((prev) => ({
+                                          ...prev,
+                                          [row.studentId]: {
+                                            ...row,
+                                            classExercise: changed?.classExercise ?? row.classExercise,
+                                            homeworkProject: changed?.homeworkProject ?? row.homeworkProject,
+                                            exam: 0,
+                                          },
+                                        }));
+                                        return;
+                                      }
+                                      const val = Math.max(0, Math.min(100, parseFloat(rawValue) || 0));
+                                      // Store the 100-point value for display; conversion to weighted happens on save
                                       setScoreChanges((prev) => ({
                                         ...prev,
                                         [row.studentId]: {

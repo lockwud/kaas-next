@@ -27,13 +27,12 @@ type ClassApi = {
   studentsCount?: number;
 };
 
-const mapClass = (item: ClassApi): ClassRow => ({
-  id: item.id,
-  className: item.className ?? item.name ?? "Unnamed Class",
-  section: item.section ?? "-",
-  classTeacher: item.classTeacher?.fullName ?? "Unassigned",
-  students: item.studentsCount ?? 0,
-});
+type StudentApi = {
+  id: string;
+  classId?: string;
+  className?: string;
+  section?: string;
+};
 
 export default function ClassesPage() {
   const { success, error } = useToast();
@@ -46,8 +45,33 @@ export default function ClassesPage() {
   const load = async () => {
     setIsLoading(true);
     try {
-      const payload = await apiRequest<ClassApi[]>(API_ENDPOINTS.classes);
-      setRows(payload.map(mapClass));
+      const [classesPayload, studentsPayload] = await Promise.all([
+        apiRequest<ClassApi[]>(API_ENDPOINTS.classes),
+        apiRequest<StudentApi[]>(API_ENDPOINTS.students).catch(() => []),
+      ]);
+
+      // Build student count map based on className only (all sections combined)
+      const studentCountMap = new Map<string, number>();
+      studentsPayload.forEach((student) => {
+        const key = student.className ?? "";
+        if (key) {
+          studentCountMap.set(key, (studentCountMap.get(key) ?? 0) + 1);
+        }
+      });
+
+      const mappedClasses = classesPayload.map((item) => {
+        const className = item.className ?? item.name ?? "";
+        const calculatedCount = studentCountMap.get(className) ?? 0;
+        return {
+          id: item.id,
+          className: className,
+          section: item.section ?? "-",
+          classTeacher: item.classTeacher?.fullName ?? "Unassigned",
+          students: calculatedCount,
+        };
+      });
+
+      setRows(mappedClasses);
     } catch (err) {
       error(err instanceof Error ? err.message : "Unable to load classes.");
     } finally {
