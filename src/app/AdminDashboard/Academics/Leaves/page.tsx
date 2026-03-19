@@ -6,7 +6,16 @@ import { Table } from "../../../../components/ui/Table";
 import { motion } from "framer-motion";
 
 export default function LeavesPage() {
-    const columns: any[] = [
+    type LeaveRow = {
+        id: string;
+        studentName: string;
+        className: string;
+        duration: string;
+        reason: string;
+        status: string;
+    };
+
+    const columns: Array<{ header: string; accessor: keyof LeaveRow }> = [
         { header: "Student Name", accessor: "studentName" },
         { header: "Class", accessor: "className" },
         { header: "Duration", accessor: "duration" },
@@ -14,7 +23,7 @@ export default function LeavesPage() {
         { header: "Status", accessor: "status" },
     ];
 
-    const data: any[] = [
+    const data: LeaveRow[] = [
         { id: "1", studentName: "John Doe", className: "JSS 2A", duration: "2 days", reason: "Medical", status: "Approved" },
     ];
 

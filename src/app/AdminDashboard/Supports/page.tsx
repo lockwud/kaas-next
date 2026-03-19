@@ -254,7 +254,7 @@ export default function SupportsPage() {
                                             </span>
                                         </div>
                                         <p className="text-xs text-slate-600 leading-relaxed">
-                                            {selectedTicket.description || "The user didn't provide a detailed description for this ticket."}
+                                            {selectedTicket.description || "The user didn&apos;t provide a detailed description for this ticket."}
                                         </p>
                                     </div>
 
@@ -265,7 +265,7 @@ export default function SupportsPage() {
                                                 <User size={14} className="text-slate-500" />
                                             </div>
                                             <div className="bg-white p-4 rounded-2xl rounded-tl-none border border-slate-200 shadow-xs max-w-[80%]">
-                                                <p className="text-xs text-slate-800 leading-relaxed font-medium">Hello, I'm following up on this issue. Any updates?</p>
+                                                <p className="text-xs text-slate-800 leading-relaxed font-medium">Hello, I&apos;m following up on this issue. Any updates?</p>
                                                 <p className="text-[10px] text-slate-400 mt-2 font-bold">YOU • 2 HOURS AGO</p>
                                             </div>
                                         </div>
@@ -275,7 +275,7 @@ export default function SupportsPage() {
                                                 <ShieldCheck size={14} className="text-white" />
                                             </div>
                                             <div className="bg-emerald-600 p-4 rounded-2xl rounded-tr-none text-white shadow-emerald-200 shadow-md max-w-[80%]">
-                                                <p className="text-xs leading-relaxed font-medium">Hi! We're currently investigating the CSV parser. It seems there's an issue with headers containing special characters. We'll have a fix soon!</p>
+                                                <p className="text-xs leading-relaxed font-medium">Hi! We&apos;re currently investigating the CSV parser. It seems there&apos;s an issue with headers containing special characters. We&apos;ll have a fix soon!</p>
                                                 <p className="text-[10px] text-emerald-100 mt-2 font-bold uppercase tracking-wider">SUPPORT TEAM • 45 MINS AGO</p>
                                             </div>
                                         </div>

@@ -184,12 +184,31 @@ export default function AssessmentsPage() {
   }, [pathname]);
 
   const classOptions = React.useMemo(() => {
-    const options = new Set(
-      classes.map((item) => `${item.className ?? item.name ?? "Class"}${item.section ?? ""}`.trim()),
-    );
-    if (options.size === 0) {
-      records.forEach((record) => options.add(toClassLabel(record)));
+    if (classes.length > 0) {
+      const byName = new Map<string, Array<{ value: string; label: string; section: string }>>();
+      classes.forEach((item) => {
+        const className = item.className ?? item.name ?? "Class";
+        const section = item.section ?? "";
+        const label = `${className}${section}`.trim();
+        const option = { value: label, label, section };
+        const key = className.trim().toLowerCase();
+        const list = byName.get(key) ?? [];
+        list.push(option);
+        byName.set(key, list);
+      });
+      const filtered: Array<{ value: string; label: string }> = [];
+      byName.forEach((list) => {
+        const hasSection = list.some((opt) => opt.section.trim() !== "");
+        list.forEach((opt) => {
+          if (hasSection && opt.section.trim() === "") return;
+          filtered.push({ value: opt.value, label: opt.label });
+        });
+      });
+      return filtered.sort((a, b) => a.label.localeCompare(b.label));
     }
+
+    const options = new Set<string>();
+    records.forEach((record) => options.add(toClassLabel(record)));
     return Array.from(options)
       .filter(Boolean)
       .sort((a, b) => a.localeCompare(b))

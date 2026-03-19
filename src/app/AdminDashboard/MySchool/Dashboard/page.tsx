@@ -19,8 +19,30 @@ import { Button } from "../../../../components/ui/Button";
 import Link from "next/link";
 import { students, users } from "../../../../lib/school-data";
 
+type SetupModule = {
+  title: string;
+  count: string;
+  icon: React.ReactElement<{ size?: number }>;
+  color: string;
+  path: string;
+  desc: string;
+};
+
+type MetricCardProps = {
+  title: string;
+  value: React.ReactNode;
+  subtitle: string;
+  icon: React.ReactNode;
+  color: "emerald" | "blue" | "indigo";
+};
+
+type CheckCircleProps = {
+  size: number;
+  className?: string;
+};
+
 export default function MySchoolDashboard() {
-  const setupModules = [
+  const setupModules: SetupModule[] = [
     {
       title: "Classes",
       count: "12 Groups",
@@ -115,7 +137,7 @@ export default function MySchoolDashboard() {
                 className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs hover:shadow-lg hover:border-emerald-200 transition-all cursor-pointer group h-full flex flex-col"
               >
                 <div className={`h-12 w-12 rounded-xl ${module.color} text-white flex items-center justify-center mb-4 shadow-md`}>
-                  {React.cloneElement(module.icon as React.ReactElement<any>, { size: 24 })}
+                  {React.cloneElement(module.icon, { size: 24 })}
                 </div>
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="font-bold text-slate-900 group-hover:text-emerald-700 transition-colors uppercase tracking-tight text-xs">{module.title}</h3>
@@ -152,8 +174,8 @@ export default function MySchoolDashboard() {
   );
 }
 
-function MetricCard({ title, value, subtitle, icon, color }: any) {
-  const colors: any = {
+function MetricCard({ title, value, subtitle, icon, color }: MetricCardProps) {
+  const colors: Record<MetricCardProps["color"], string> = {
     emerald: "text-emerald-600 bg-emerald-50 border-emerald-100",
     blue: "text-blue-600 bg-blue-50 border-blue-100",
     indigo: "text-indigo-600 bg-indigo-50 border-indigo-100"
@@ -173,7 +195,7 @@ function MetricCard({ title, value, subtitle, icon, color }: any) {
   );
 }
 
-function CheckCircle({ size, className }: any) {
+function CheckCircle({ size, className }: CheckCircleProps) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

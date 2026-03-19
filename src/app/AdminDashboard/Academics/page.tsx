@@ -327,13 +327,53 @@ export default function AcademicsDashboard() {
       }
 
       if (studentsPayload) {
+        const classLookup = new Map(
+          (classes ?? []).map((item) => [
+            item.id,
+            {
+              className: item.className ?? item.name ?? "",
+              section: item.section ?? "",
+            },
+          ]),
+        );
+        const classLookupByLabel = new Map(
+          (classes ?? []).map((item) => {
+            const className = item.className ?? item.name ?? "";
+            const section = item.section ?? "";
+            const label = `${className} ${section}`.trim();
+            return [normalize(label), { className, section }];
+          }),
+        );
         setManagedStudents(
-          studentsPayload.map((student) => ({
-            id: student.id,
-            fullName: student.fullName ?? student.name ?? "Unnamed Student",
-            className: student.className ?? "",
-            section: student.section ?? "",
-          })),
+          studentsPayload.map((student) => {
+            const fallbackName = student.className ?? "";
+            const fallbackSection = student.section ?? "";
+            if (student.classId && classLookup.has(student.classId)) {
+              const lookup = classLookup.get(student.classId);
+              return {
+                id: student.id,
+                fullName: student.fullName ?? student.name ?? "Unnamed Student",
+                className: lookup?.className ?? fallbackName,
+                section: lookup?.section ?? fallbackSection,
+              };
+            }
+            const labelKey = normalize(`${fallbackName} ${fallbackSection}`.trim() || fallbackName);
+            const lookupByLabel = labelKey ? classLookupByLabel.get(labelKey) : undefined;
+            if (lookupByLabel) {
+              return {
+                id: student.id,
+                fullName: student.fullName ?? student.name ?? "Unnamed Student",
+                className: lookupByLabel.className || fallbackName,
+                section: lookupByLabel.section || fallbackSection,
+              };
+            }
+            return {
+              id: student.id,
+              fullName: student.fullName ?? student.name ?? "Unnamed Student",
+              className: fallbackName,
+              section: fallbackSection,
+            };
+          }),
         );
       }
 
@@ -519,30 +559,50 @@ export default function AcademicsDashboard() {
     setAssessmentStudents(mergedStudents);
 
     const classMap = new Map<string, AssessmentClassOption>();
+    const classesByName = new Map<string, AssessmentClassOption[]>();
 
     classDirectory.forEach((classRow) => {
       const key = toAssessmentClassKey(classRow.className, classRow.section);
-      classMap.set(key, {
+      const option = {
         id: classRow.id,
         className: classRow.className,
         section: classRow.section,
         label: toAssessmentClassLabel(classRow.className, classRow.section),
-      });
+      };
+      classMap.set(key, option);
+      const nameKey = normalize(classRow.className);
+      const existing = classesByName.get(nameKey) ?? [];
+      existing.push(option);
+      classesByName.set(nameKey, existing);
     });
 
     mergedStudents.forEach((student) => {
       const key = toAssessmentClassKey(student.className, student.section);
       if (!classMap.has(key)) {
-        classMap.set(key, {
+        const option = {
           id: `class_${key}`,
           className: student.className,
           section: student.section,
           label: toAssessmentClassLabel(student.className, student.section),
-        });
+        };
+        classMap.set(key, option);
+        const nameKey = normalize(student.className);
+        const existing = classesByName.get(nameKey) ?? [];
+        existing.push(option);
+        classesByName.set(nameKey, existing);
       }
     });
 
-    const sortedClassOptions = Array.from(classMap.values()).sort((a, b) =>
+    const filteredOptions: AssessmentClassOption[] = [];
+    classesByName.forEach((options) => {
+      const hasSection = options.some((opt) => opt.section.trim() !== "");
+      options.forEach((opt) => {
+        if (hasSection && opt.section.trim() === "") return;
+        filteredOptions.push(opt);
+      });
+    });
+
+    const sortedClassOptions = filteredOptions.sort((a, b) =>
       a.label.localeCompare(b.label, undefined, { sensitivity: "base" }),
     );
 

@@ -6,7 +6,16 @@ import { Table } from "../../../../components/ui/Table";
 import { motion } from "framer-motion";
 
 export default function HomeworkPage() {
-    const columns: any[] = [
+    type HomeworkRow = {
+        id: string;
+        title: string;
+        subject: string;
+        className: string;
+        deadline: string;
+        status: string;
+    };
+
+    const columns: Array<{ header: string; accessor: keyof HomeworkRow }> = [
         { header: "Title", accessor: "title" },
         { header: "Subject", accessor: "subject" },
         { header: "Class", accessor: "className" },
@@ -14,7 +23,7 @@ export default function HomeworkPage() {
         { header: "Status", accessor: "status" },
     ];
 
-    const data: any[] = [
+    const data: HomeworkRow[] = [
         { id: "1", title: "Trigonometry Problems", subject: "Mathematics", className: "JSS 3", deadline: "2024-03-01", status: "Open" },
         { id: "2", title: "Biology Diagram", subject: "Science", className: "JSS 2", deadline: "2024-03-02", status: "Open" },
     ];

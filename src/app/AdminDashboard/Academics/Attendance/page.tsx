@@ -6,14 +6,22 @@ import { Table } from "../../../../components/ui/Table";
 import { motion } from "framer-motion";
 
 export default function AttendancePage() {
-    const columns: any[] = [
+    type AttendanceRow = {
+        id: string;
+        studentName: string;
+        className: string;
+        date: string;
+        status: string;
+    };
+
+    const columns: Array<{ header: string; accessor: keyof AttendanceRow }> = [
         { header: "Student Name", accessor: "studentName" },
         { header: "Class", accessor: "className" },
         { header: "Date", accessor: "date" },
         { header: "Status", accessor: "status" },
     ];
 
-    const data: any[] = [
+    const data: AttendanceRow[] = [
         { id: "1", studentName: "John Doe", className: "JSS 2A", date: "2024-02-24", status: "Present" },
         { id: "2", studentName: "Jane Smith", className: "JSS 2A", date: "2024-02-24", status: "Absent" },
     ];

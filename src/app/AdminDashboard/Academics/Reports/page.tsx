@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { createRoot } from "react-dom/client";
 import { usePathname } from "next/navigation";
 import DashboardLayout from "../../../../components/DashboardLayout";
 import { Button } from "../../../../components/ui/Button";
@@ -8,10 +9,15 @@ import { Pagination } from "../../../../components/ui/Pagination";
 import { Select } from "../../../../components/ui/Select";
 import { motion } from "framer-motion";
 import Image from "next/image";
-import { Eye, FileDown, RefreshCw, Search } from "lucide-react";
+import { Eye, FileDown, RefreshCw, Search, X, Printer } from "lucide-react";
 import { useToast } from "@/hooks/useToast";
 import { apiRequest } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/lib/api-endpoints";
+import { useReactToPrint } from "react-to-print";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
+import JSZip from "jszip";
+import { saveAs } from "file-saver";
 
 type AssessmentStoredRecord = {
   id: string;
@@ -39,6 +45,9 @@ type ReportStatusMap = Record<string, { printedAt?: string }>;
 
 type ReportSubjectRow = {
   subject: string;
+  classExercise?: number;
+  homeworkProject?: number;
+  exam?: number;
   score?: number;
   grade: string;
   remark: string;
@@ -122,6 +131,182 @@ const scoreToDiscipline = (score: number) => {
   return "Poor";
 };
 
+const gradeInterpretation = [
+  { range: "85 - 100", grade: "A", remark: "Excellent" },
+  { range: "75 - 84", grade: "B", remark: "Very Good" },
+  { range: "65 - 74", grade: "C", remark: "Good" },
+  { range: "50 - 64", grade: "D", remark: "Fair" },
+  { range: "40 - 49", grade: "E", remark: "Needs Improvement" },
+  { range: "0 - 39", grade: "F", remark: "Poor" },
+];
+
+const formatExamWeight = (exam?: number) => {
+  if (typeof exam !== "number") return "-";
+  if (exam <= 60) return exam;
+  const converted = exam * 0.5;
+  return Number.isInteger(converted) ? converted : Number(converted.toFixed(1));
+};
+
+const ReportBody = ({ report }: { report: ReportCard }) => {
+  return (
+    <>
+      <div className="flex items-center justify-between px-6 py-4 print-header report-header-bar">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 overflow-hidden rounded-full border border-white/40 bg-white/90">
+            <Image
+              src="/KAASLOGO.jpeg"
+              alt="Kaas logo"
+              width={40}
+              height={40}
+            />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold">Kaas Montessori School</h3>
+            <p className="text-xs text-white/80">Terminal Report</p>
+          </div>
+        </div>
+        <div className="text-right text-[11px] text-white/80">
+          <p className="font-semibold text-white">
+            Academic Year: {report.academicYear}
+          </p>
+          <p>Term: {formatTerm(report.term)}</p>
+        </div>
+      </div>
+
+      <div className="space-y-5 p-6 print-area">
+        <div className="rounded-lg border border-slate-200 p-4 text-xs">
+          <p className="text-[11px] font-semibold uppercase report-section-title">
+            Student Details
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-slate-700">
+            <p>
+              <span className="report-label">Student Name:</span>{" "}
+              {report.studentName}
+            </p>
+            <p>
+              <span className="report-label">Class:</span> {report.classLabel}
+            </p>
+            <p>
+              <span className="report-label">Student ID:</span>{" "}
+              {report.studentId}
+            </p>
+            <p>
+              <span className="report-label">Attendance:</span>{" "}
+              {report.attendance.present}/{report.attendance.total} (
+              {report.attendance.percent}%)
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold uppercase report-section-title">
+            Academic Performance
+          </p>
+          <div className="mt-2 overflow-hidden rounded-lg border border-slate-200">
+            <table className="w-full text-left text-xs print-table report-table">
+              <thead>
+                <tr>
+                  <th className="px-3 py-2">Subject</th>
+                  <th className="px-3 py-2">Class Exercise</th>
+                  <th className="px-3 py-2">Homework + Project</th>
+                  <th className="px-3 py-2">Exam (60%)</th>
+                  <th className="px-3 py-2">Total</th>
+                  <th className="px-3 py-2">Grade</th>
+                  <th className="px-3 py-2">Remarks</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.subjects.map((row) => (
+                  <tr
+                    key={row.subject}
+                    className="border-t border-slate-100 text-slate-700"
+                  >
+                    <td className="px-3 py-2 subject">{row.subject}</td>
+                    <td className="px-3 py-2">{row.classExercise ?? "-"}</td>
+                    <td className="px-3 py-2">{row.homeworkProject ?? "-"}</td>
+                    <td className="px-3 py-2">{formatExamWeight(row.exam)}</td>
+                    <td className="px-3 py-2">{row.score ?? "-"}</td>
+                    <td className="px-3 py-2">{row.grade}</td>
+                    <td className="px-3 py-2">{row.remark}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-slate-200 p-4 text-xs">
+          <p className="text-[11px] font-semibold uppercase report-section-title">
+            Interpretation Of Score & Grade Mapping
+          </p>
+          <div className="mt-3 overflow-hidden rounded-lg border border-slate-200">
+            <table className="w-full text-left text-xs print-table report-table">
+              <thead>
+                <tr>
+                  <th className="px-3 py-2">Score Range</th>
+                  <th className="px-3 py-2">Grade</th>
+                  <th className="px-3 py-2">Remark</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gradeInterpretation.map((row) => (
+                  <tr
+                    key={row.grade}
+                    className="border-t border-slate-100 text-slate-700"
+                  >
+                    <td className="px-3 py-2">{row.range}</td>
+                    <td className="px-3 py-2">{row.grade}</td>
+                    <td className="px-3 py-2">{row.remark}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-slate-200 p-4 text-xs">
+          <p className="text-[11px] font-semibold uppercase report-section-title">
+            Summary & Conduct
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-3 text-slate-700">
+            <p>
+              <span className="report-label">Overall Score:</span>{" "}
+              {report.overallScore}%
+            </p>
+            <p>
+              <span className="report-label">Overall Grade:</span>{" "}
+              {report.overallGrade}
+            </p>
+            <p>
+              <span className="report-label">Behavior:</span> {report.behavior}
+            </p>
+            <p>
+              <span className="report-label">Discipline:</span>{" "}
+              {report.discipline}
+            </p>
+            <p>
+              <span className="report-label">Class Position:</span>
+            </p>
+            <p>
+              <span className="report-label">Reopening Date:</span>
+            </p>
+          </div>
+          <p className="mt-3 text-slate-600">{report.summary}</p>
+        </div>
+
+        <div className="pt-20 text-xs text-slate-600">
+          <div className="mx-auto max-w-[240px]">
+            <div className="h-px w-full bg-slate-300" />
+            <p className="mt-2 text-center">
+              Headmaster&apos;s Signature
+            </p>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
 const scoreToAttendance = (score: number) => {
   const total = 90;
   const present = Math.max(
@@ -158,9 +343,11 @@ export default function ReportsPage() {
   );
   const reportModalRef = React.useRef<HTMLDivElement | null>(null);
   const reportContentRef = React.useRef<HTMLDivElement | null>(null);
+  const printRef = React.useRef<HTMLDivElement | null>(null);
   const [reportScale, setReportScale] = React.useState(1);
   const [reportStatus, setReportStatus] = React.useState<ReportStatusMap>({});
   const [isLoading, setIsLoading] = React.useState(false);
+  const [isBulkExporting, setIsBulkExporting] = React.useState(false);
   const [studentPage, setStudentPage] = React.useState(1);
   const [studentPageSize, setStudentPageSize] = React.useState(10);
   const [reportPage, setReportPage] = React.useState(1);
@@ -200,17 +387,31 @@ export default function ReportsPage() {
   }, [pathname]);
 
   const classOptions = React.useMemo(() => {
-    const map = new Map<string, { id: string; label: string }>();
+    const byName = new Map<
+      string,
+      Array<{ id: string; label: string; section: string }>
+    >();
     assessmentRecords.forEach((record) => {
-      const label =
-        `${record.className ?? "Class"}${record.section ?? ""}`.trim();
-      if (!map.has(label)) {
-        map.set(label, { id: label, label });
-      }
+      const className = record.className ?? "Class";
+      const section = record.section ?? "";
+      const label = `${className}${section}`.trim();
+      if (!label) return;
+      const key = className.trim().toLowerCase();
+      const list = byName.get(key) ?? [];
+      list.push({ id: label, label, section });
+      byName.set(key, list);
     });
-    return Array.from(map.values()).sort((a, b) =>
-      a.label.localeCompare(b.label),
-    );
+
+    const filtered: Array<{ id: string; label: string }> = [];
+    byName.forEach((list) => {
+      const hasSection = list.some((opt) => opt.section.trim() !== "");
+      list.forEach((opt) => {
+        if (hasSection && opt.section.trim() === "") return;
+        filtered.push({ id: opt.id, label: opt.label });
+      });
+    });
+
+    return filtered.sort((a, b) => a.label.localeCompare(b.label));
   }, [assessmentRecords]);
 
   const yearOptions = React.useMemo(() => {
@@ -256,7 +457,16 @@ export default function ReportsPage() {
       {
         studentName: string;
         classLabel: string;
-        subjectScores: Map<string, { score: number; savedAt: string }>;
+        subjectScores: Map<
+          string,
+          {
+            total: number;
+            classExercise: number;
+            homeworkProject: number;
+            exam: number;
+            savedAt: string;
+          }
+        >;
         term: "first_term" | "second_term" | "third_term";
         academicYear: string;
         classId: string;
@@ -294,14 +504,17 @@ export default function ReportsPage() {
           : 0;
         if (!existing || recordTime >= existingTime) {
           entry.subjectScores.set(record.subject, {
-            score: row.total,
+            total: row.total,
+            classExercise: row.classExercise,
+            homeworkProject: row.homeworkProject,
+            exam: row.exam,
             savedAt: record.savedAt ?? "",
           });
         }
       });
     });
 
-    return Array.from(studentMap.entries()).map(([_, data]) => {
+    return Array.from(studentMap.entries()).map(([, data]) => {
       const subjectKey = `${data.classLabel}|${data.term}|${data.academicYear}`;
       const requiredSubjects = Array.from(
         subjectMap.get(subjectKey) ?? [],
@@ -317,9 +530,12 @@ export default function ReportsPage() {
               remark: "Pending",
             };
           }
-          const score = scoreEntry.score;
+          const score = scoreEntry.total;
           return {
             subject,
+            classExercise: scoreEntry.classExercise,
+            homeworkProject: scoreEntry.homeworkProject,
+            exam: scoreEntry.exam,
             score,
             grade: scoreToGrade(score),
             remark: scoreToRemark(score),
@@ -518,19 +734,241 @@ export default function ReportsPage() {
     return () => window.removeEventListener("resize", handleResize);
   }, [activeReport, computeReportScale]);
 
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: activeReport
+      ? `${activeReport.studentName.replace(/[^a-zA-Z0-9]/g, "_")}_${activeReport.classLabel.replace(/[^a-zA-Z0-9]/g, "_")}_Report`
+      : "KAAS_Report",
+  });
+
+  const waitForImages = async (container: HTMLElement) => {
+    const images = Array.from(container.querySelectorAll("img"));
+    await Promise.all(
+      images.map(
+        (img) =>
+          new Promise<void>((resolve) => {
+            if (img.complete) {
+              resolve();
+              return;
+            }
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+          }),
+      ),
+    );
+  };
+
+  const renderReportToPdfBlob = async (card: ReportCard) => {
+    const host = document.createElement("div");
+    host.style.position = "fixed";
+    host.style.left = "-9999px";
+    host.style.top = "0";
+    host.style.width = "210mm";
+    host.style.background = "white";
+    host.style.zIndex = "0";
+    document.body.appendChild(host);
+
+    const root = createRoot(host);
+    root.render(
+      <div className="report-theme report-export">
+        <div className="report-watermark" aria-hidden="true">
+          <Image
+            src="/KAASLOGO.jpeg"
+            alt="School Logo Watermark"
+            width={400}
+            height={400}
+            style={{ width: "100%", height: "auto" }}
+            unoptimized
+            priority
+          />
+        </div>
+        <div className="print-modal-content">
+          <ReportBody report={card} />
+        </div>
+      </div>,
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    await waitForImages(host);
+
+    const canvas = await html2canvas(host, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: "#ffffff",
+      onclone: (doc) => {
+        const reportRoot = doc.querySelector(".report-export");
+        if (!reportRoot || !doc.defaultView) return;
+        const sanitizeCss = (cssText: string) =>
+          cssText
+            .replace(/color-mix\([^)]*\)/gi, "rgba(0,0,0,0)")
+            .replace(/(oklch|oklab|lch|lab)\([^)]*\)/gi, "rgba(0,0,0,0)")
+            .replace(/color\([^)]*\)/gi, "rgba(0,0,0,0)");
+        const hasModernColor = (value: string) => {
+          const lower = value.toLowerCase();
+          return (
+            lower.includes("lab(") ||
+            lower.includes("oklab(") ||
+            lower.includes("lch(") ||
+            lower.includes("oklch(") ||
+            lower.includes("color(") ||
+            lower.includes("color-mix(")
+          );
+        };
+        const normalizeColor = (value: string, fallback: string) =>
+          hasModernColor(value) ? fallback : value;
+        const elements = Array.from(
+          reportRoot.querySelectorAll<HTMLElement>("*"),
+        );
+        elements.push(reportRoot as HTMLElement);
+        elements.forEach((el) => {
+          const computed = doc.defaultView?.getComputedStyle(el);
+          if (!computed) return;
+          if (computed.color) el.style.color = normalizeColor(computed.color, "#0f172a");
+          if (computed.borderColor) el.style.borderColor = normalizeColor(computed.borderColor, "#e2e8f0");
+          if (computed.outlineColor) el.style.outlineColor = normalizeColor(computed.outlineColor, "#e2e8f0");
+          if (computed.textDecorationColor) {
+            el.style.textDecorationColor = normalizeColor(computed.textDecorationColor, "#0f172a");
+          }
+          if (computed.caretColor) el.style.caretColor = normalizeColor(computed.caretColor, "#0f172a");
+          if (computed.columnRuleColor) {
+            el.style.columnRuleColor = normalizeColor(computed.columnRuleColor, "#e2e8f0");
+          }
+          if (computed.backgroundColor && computed.backgroundColor !== "rgba(0, 0, 0, 0)") {
+            el.style.backgroundColor = normalizeColor(computed.backgroundColor, "#ffffff");
+          }
+          if (computed.backgroundImage && hasModernColor(computed.backgroundImage)) {
+            el.style.backgroundImage = "none";
+          }
+          if (computed.boxShadow && hasModernColor(computed.boxShadow)) {
+            el.style.boxShadow = "none";
+          }
+          if (computed.textShadow && hasModernColor(computed.textShadow)) {
+            el.style.textShadow = "none";
+          }
+          if (computed.fill && computed.fill !== "none") {
+            el.style.fill = normalizeColor(computed.fill, "#0f172a");
+          }
+          if (computed.stroke && computed.stroke !== "none") {
+            el.style.stroke = normalizeColor(computed.stroke, "#0f172a");
+          }
+          if (computed.filter && hasModernColor(computed.filter)) {
+            el.style.filter = "none";
+          }
+        });
+        const docEl = doc.documentElement as HTMLElement;
+        const bodyEl = doc.body as HTMLElement;
+        docEl.style.backgroundColor = "#ffffff";
+        bodyEl.style.backgroundColor = "#ffffff";
+        const styleNodes = Array.from(doc.querySelectorAll("style"));
+        styleNodes.forEach((node) => {
+          if (node.textContent) {
+            node.textContent = sanitizeCss(node.textContent);
+          }
+        });
+        const linkNodes = Array.from(
+          doc.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'),
+        );
+        linkNodes.forEach((link) => {
+          try {
+            const sheet = link.sheet as CSSStyleSheet | null;
+            if (sheet?.cssRules) {
+              let cssText = "";
+              Array.from(sheet.cssRules).forEach((rule) => {
+                cssText += `${rule.cssText}\n`;
+              });
+              const style = doc.createElement("style");
+              style.textContent = sanitizeCss(cssText);
+              link.replaceWith(style);
+              return;
+            }
+          } catch {
+            // Ignore and fall through to removal below
+          }
+          link.remove();
+        });
+      },
+    });
+
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pageWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    let heightLeft = imgHeight;
+    let position = 0;
+
+    pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+    }
+
+    const blob = pdf.output("blob");
+    root.unmount();
+    host.remove();
+    return blob;
+  };
+
+  const bulkExportZip = async () => {
+    if (selectedReportIds.length === 0) {
+      error("Select students to export.");
+      return;
+    }
+    const cardsToExport = reportCards.filter((c) =>
+      selectedReportIds.includes(c.id),
+    );
+    if (cardsToExport.length === 0) {
+      error("No reports selected for export.");
+      return;
+    }
+
+    setIsBulkExporting(true);
+    try {
+      const zip = new JSZip();
+      for (const card of cardsToExport) {
+        const blob = await renderReportToPdfBlob(card);
+        const student = card.studentName.replace(/[^a-zA-Z0-9]/g, "_");
+        const classLabel = card.classLabel.replace(/[^a-zA-Z0-9]/g, "_");
+        const fileName = `${student}_${classLabel}_${formatTerm(card.term)}.pdf`;
+        zip.file(fileName, blob);
+      }
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const zipName = `reports_${new Date().toISOString().split("T")[0]}.zip`;
+      saveAs(zipBlob, zipName);
+
+      for (const card of cardsToExport) {
+        await markPrinted(card);
+      }
+
+      success(`Exported ${cardsToExport.length} report(s) to ZIP.`);
+    } catch (err) {
+      console.error("Bulk export failed:", err);
+      error("Bulk export failed. Please try again.");
+    } finally {
+      setIsBulkExporting(false);
+    }
+  };
+
+
   return (
     <DashboardLayout loading={isLoading}>
       <style jsx global>{`
         .report-theme {
-          --report-primary: #0f766e;
-          --report-accent: #d97706;
-          --report-soft: #ecfdf5;
+          --report-primary: #0f172a;
+          --report-accent: #b45309;
+          --report-soft: #f8fafc;
           --report-soft-2: #fff7ed;
           --report-ink: #0f172a;
         }
 
         .report-theme .report-header-bar {
-          background: linear-gradient(120deg, var(--report-primary), var(--report-accent));
+          background: linear-gradient(120deg, var(--report-primary) 0%, var(--report-primary) 70%, var(--report-accent) 100%);
           color: white;
         }
 
@@ -594,9 +1032,16 @@ export default function ReportsPage() {
           display: none;
         }
 
+        .report-export {
+          position: relative;
+          width: 190mm;
+          margin: 0 auto;
+          background: white;
+        }
+
         @page {
           size: auto;
-          margin: 10mm;
+          margin: 0;
         }
 
         @media print {
@@ -614,56 +1059,10 @@ export default function ReportsPage() {
             background: white !important;
           }
 
-          /* Hide dashboard chrome + screen content */
-          aside,
-          header {
-            display: none !important;
-          }
+          /* Keep colors and layout; printing uses report content only */
 
-          .reports-screen {
-            display: none !important;
-          }
-
-          main {
-            padding: 0 !important;
-            margin: 0 !important;
-            overflow: visible !important;
-            width: 100% !important;
-          }
-
-          .print-only {
-            display: block !important;
-          }
-
-          .print-root {
-            position: static !important;
-            inset: auto !important;
-            padding: 0 !important;
-            background: white !important;
-            display: block !important;
-            height: auto !important;
-            min-height: auto !important;
-            overflow: visible !important;
-          }
-
-          /* Show only print modal */
           .print-modal {
-            display: none !important;
-            position: static !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            height: auto !important;
-            min-height: auto !important;
-            max-width: none !important;
-            max-height: none !important;
-            overflow: visible !important;
-            border: none !important;
-            box-shadow: none !important;
-            background: white !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            visibility: visible !important;
+            display: block !important;
           }
 
           /* Hide non-print elements */
@@ -696,7 +1095,9 @@ export default function ReportsPage() {
             width: 100% !important;
             height: auto !important;
             min-height: auto !important;
-            padding: 10mm !important;
+            max-width: 190mm !important;
+            margin: 0 auto !important;
+            padding: 8mm 8mm 10mm !important;
             box-sizing: border-box !important;
             overflow: visible !important;
             visibility: visible !important;
@@ -730,7 +1131,6 @@ export default function ReportsPage() {
           }
 
           .print-table thead {
-            background: #f0f0f0 !important;
             display: table-header-group !important;
           }
 
@@ -749,6 +1149,10 @@ export default function ReportsPage() {
 
           .report-preview > .print-modal-content {
             width: 100% !important;
+          }
+
+          .print-only {
+            display: none !important;
           }
         }
       `}</style>
@@ -807,6 +1211,15 @@ export default function ReportsPage() {
               success(`Exported ${cardsToExport.length} report(s) to CSV.`);
             }}>
               <FileDown size={13} className="mr-1" /> Excel
+            </Button>
+            <Button
+              variant="outline"
+              className="h-9 px-3 text-xs"
+              onClick={() => void bulkExportZip()}
+              disabled={isBulkExporting}
+            >
+              <FileDown size={13} className="mr-1" />{" "}
+              {isBulkExporting ? "Exporting..." : "Bulk ZIP"}
             </Button>
             <Button className="h-9 px-3 text-xs bg-rose-600 hover:bg-rose-700" onClick={() => {
               if (selectedReportIds.length === 0) {
@@ -1059,7 +1472,7 @@ export default function ReportsPage() {
       </div>
 
       {activeReport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm print-root">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
           <div
             className="absolute inset-0 print-overlay"
             onClick={() => setActiveReport(null)}
@@ -1068,6 +1481,27 @@ export default function ReportsPage() {
             ref={reportModalRef}
             className="relative flex h-[92vh] w-full max-w-3xl items-start justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl print-modal report-theme"
           >
+            <div className="absolute right-4 top-4 z-10 flex items-center gap-2 print-actions">
+              <button
+                type="button"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/90 text-slate-700 shadow-sm transition hover:bg-slate-50"
+                title="Print"
+                onClick={async () => {
+                  await markPrinted(activeReport);
+                  handlePrint();
+                }}
+              >
+                <Printer size={16} />
+              </button>
+              <button
+                type="button"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/90 text-slate-700 shadow-sm transition hover:bg-slate-50"
+                title="Close"
+                onClick={() => setActiveReport(null)}
+              >
+                <X size={16} />
+              </button>
+            </div>
             <div className="report-watermark print-watermark" aria-hidden="true">
               <Image
                 src="/KAASLOGO.jpeg"
@@ -1086,7 +1520,7 @@ export default function ReportsPage() {
                   ["--report-scale" as string]: reportScale,
                 }}
               >
-                <div ref={reportContentRef} className="print-modal-content">
+                <div ref={printRef} className="print-modal-content report-theme" id="print-report">
                   <div className="flex items-center justify-between px-6 py-4 print-header report-header-bar">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 overflow-hidden rounded-full border border-white/40 bg-white/90">
@@ -1150,7 +1584,10 @@ export default function ReportsPage() {
                           <thead>
                             <tr>
                               <th className="px-3 py-2">Subject</th>
-                              <th className="px-3 py-2">Score</th>
+                              <th className="px-3 py-2">Class Exercise</th>
+                              <th className="px-3 py-2">Homework + Project</th>
+                              <th className="px-3 py-2">Exam (60%)</th>
+                              <th className="px-3 py-2">Total</th>
                               <th className="px-3 py-2">Grade</th>
                               <th className="px-3 py-2">Remarks</th>
                             </tr>
@@ -1162,7 +1599,39 @@ export default function ReportsPage() {
                                 className="border-t border-slate-100 text-slate-700"
                               >
                                 <td className="px-3 py-2 subject">{row.subject}</td>
+                                <td className="px-3 py-2">{row.classExercise ?? "-"}</td>
+                                <td className="px-3 py-2">{row.homeworkProject ?? "-"}</td>
+                                <td className="px-3 py-2">{formatExamWeight(row.exam)}</td>
                                 <td className="px-3 py-2">{row.score ?? "-"}</td>
+                                <td className="px-3 py-2">{row.grade}</td>
+                                <td className="px-3 py-2">{row.remark}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-slate-200 p-4 text-xs">
+                      <p className="text-[11px] font-semibold uppercase report-section-title">
+                        Interpretation Of Score & Grade Mapping
+                      </p>
+                      <div className="mt-3 overflow-hidden rounded-lg border border-slate-200">
+                        <table className="w-full text-left text-xs print-table report-table">
+                          <thead>
+                            <tr>
+                              <th className="px-3 py-2">Score Range</th>
+                              <th className="px-3 py-2">Grade</th>
+                              <th className="px-3 py-2">Remark</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {gradeInterpretation.map((row) => (
+                              <tr
+                                key={row.grade}
+                                className="border-t border-slate-100 text-slate-700"
+                              >
+                                <td className="px-3 py-2">{row.range}</td>
                                 <td className="px-3 py-2">{row.grade}</td>
                                 <td className="px-3 py-2">{row.remark}</td>
                               </tr>
@@ -1203,14 +1672,8 @@ export default function ReportsPage() {
                       <p className="mt-3 text-slate-600">{activeReport.summary}</p>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-6 pt-4 text-xs text-slate-600">
-                      <div>
-                        <div className="h-px w-full bg-slate-300" />
-                        <p className="mt-2 text-center">
-                          Class Teacher&apos;s Signature
-                        </p>
-                      </div>
-                      <div>
+                    <div className="pt-20 text-xs text-slate-600">
+                      <div className="mx-auto max-w-[240px]">
                         <div className="h-px w-full bg-slate-300" />
                         <p className="mt-2 text-center">
                           Headmaster&apos;s Signature
@@ -1219,34 +1682,6 @@ export default function ReportsPage() {
                     </div>
                   </div>
 
-                  <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4 print-actions">
-                    <Button variant="outline" onClick={() => setActiveReport(null)}>
-                      Close
-                    </Button>
-                    <Button
-                      className="bg-emerald-600"
-                      onClick={async () => {
-                        await markPrinted(activeReport);
-                        if (typeof window !== "undefined") {
-                          // Set custom filename before printing
-                          const studentName = activeReport.studentName.replace(/[^a-zA-Z0-9]/g, '_');
-                          const className = activeReport.classLabel.replace(/[^a-zA-Z0-9]/g, '_');
-                          const fileName = `${studentName}_${className}_Report`;
-                          
-                          // Create a link to print with custom title (works in some browsers)
-                          document.title = fileName;
-                          
-                          setTimeout(() => {
-                            window.print();
-                            // Reset title after print
-                            setTimeout(() => { document.title = 'KAAS Reports'; }, 1000);
-                          }, 100);
-                        }
-                      }}
-                    >
-                      Print
-                    </Button>
-                  </div>
                 </div>
               </div>
             </div>
@@ -1254,154 +1689,6 @@ export default function ReportsPage() {
         </div>
       )}
 
-      {activeReport && (
-        <div className="print-only report-theme">
-          <div className="relative">
-            <div className="report-watermark" aria-hidden="true">
-              <Image
-                src="/KAASLOGO.jpeg"
-                alt="School Logo Watermark"
-                width={400}
-                height={400}
-                style={{ width: "100%", height: "auto" }}
-                unoptimized
-                priority
-              />
-            </div>
-            <div className="print-modal-content">
-              <div className="flex items-center justify-between px-6 py-4 print-header report-header-bar">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 overflow-hidden rounded-full border border-white/40 bg-white/90">
-                    <Image
-                      src="/KAASLOGO.jpeg"
-                      alt="Kaas logo"
-                      width={40}
-                      height={40}
-                    />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold">
-                      Kaas Montessori School
-                    </h3>
-                    <p className="text-xs text-white/80">Terminal Report</p>
-                  </div>
-                </div>
-                <div className="text-right text-[11px] text-white/80">
-                  <p className="font-semibold text-white">
-                    Academic Year: {activeReport.academicYear}
-                  </p>
-                  <p>Term: {formatTerm(activeReport.term)}</p>
-                </div>
-              </div>
-
-              <div className="space-y-5 p-6 print-area">
-                <div className="rounded-lg border border-slate-200 p-4 text-xs">
-                  <p className="text-[11px] font-semibold uppercase report-section-title">
-                    Student Details
-                  </p>
-                  <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-slate-700">
-                    <p>
-                      <span className="report-label">Student Name:</span>{" "}
-                      {activeReport.studentName}
-                    </p>
-                    <p>
-                      <span className="report-label">Class:</span>{" "}
-                      {activeReport.classLabel}
-                    </p>
-                    <p>
-                      <span className="report-label">Student ID:</span>{" "}
-                      {activeReport.studentId}
-                    </p>
-                    <p>
-                      <span className="report-label">Attendance:</span>{" "}
-                      {activeReport.attendance.present}/
-                      {activeReport.attendance.total} (
-                      {activeReport.attendance.percent}%)
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-xs font-semibold uppercase report-section-title">
-                    Academic Performance
-                  </p>
-                  <div className="mt-2 overflow-hidden rounded-lg border border-slate-200">
-                    <table className="w-full text-left text-xs print-table report-table">
-                      <thead>
-                        <tr>
-                          <th className="px-3 py-2">Subject</th>
-                          <th className="px-3 py-2">Score</th>
-                          <th className="px-3 py-2">Grade</th>
-                          <th className="px-3 py-2">Remarks</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {activeReport.subjects.map((row) => (
-                          <tr
-                            key={row.subject}
-                            className="border-t border-slate-100 text-slate-700"
-                          >
-                            <td className="px-3 py-2 subject">{row.subject}</td>
-                            <td className="px-3 py-2">{row.score ?? "-"}</td>
-                            <td className="px-3 py-2">{row.grade}</td>
-                            <td className="px-3 py-2">{row.remark}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <div className="rounded-lg border border-slate-200 p-4 text-xs">
-                  <p className="text-[11px] font-semibold uppercase report-section-title">
-                    Summary & Conduct
-                  </p>
-                  <div className="mt-3 grid grid-cols-2 gap-3 text-slate-700">
-                    <p>
-                      <span className="report-label">Overall Score:</span>{" "}
-                      {activeReport.overallScore}%
-                    </p>
-                    <p>
-                      <span className="report-label">Overall Grade:</span>{" "}
-                      {activeReport.overallGrade}
-                    </p>
-                    <p>
-                      <span className="report-label">Behavior:</span>{" "}
-                      {activeReport.behavior}
-                    </p>
-                    <p>
-                      <span className="report-label">Discipline:</span>{" "}
-                      {activeReport.discipline}
-                    </p>
-                    <p>
-                      <span className="report-label">Class Position:</span>
-                    </p>
-                    <p>
-                      <span className="report-label">Reopening Date:</span>
-                    </p>
-                  </div>
-                  <p className="mt-3 text-slate-600">{activeReport.summary}</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-6 pt-4 text-xs text-slate-600">
-                  <div>
-                    <div className="h-px w-full bg-slate-300" />
-                    <p className="mt-2 text-center">
-                      Class Teacher&apos;s Signature
-                    </p>
-                  </div>
-                  <div>
-                    <div className="h-px w-full bg-slate-300" />
-                    <p className="mt-2 text-center">
-                      Headmaster&apos;s Signature
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </DashboardLayout>
   );
 }

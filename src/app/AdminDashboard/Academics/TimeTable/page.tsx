@@ -6,7 +6,16 @@ import { Table } from "../../../../components/ui/Table";
 import { motion } from "framer-motion";
 
 export default function TimeTablePage() {
-    const columns: any[] = [
+    type TimeTableRow = {
+        id: string;
+        className: string;
+        day: string;
+        period: string;
+        subject: string;
+        teacher: string;
+    };
+
+    const columns: Array<{ header: string; accessor: keyof TimeTableRow }> = [
         { header: "Class", accessor: "className" },
         { header: "Day", accessor: "day" },
         { header: "Period", accessor: "period" },
@@ -14,7 +23,7 @@ export default function TimeTablePage() {
         { header: "Teacher", accessor: "teacher" },
     ];
 
-    const data: any[] = [
+    const data: TimeTableRow[] = [
         { id: "1", className: "JSS 2A", day: "Monday", period: "1st Period", subject: "Mathematics", teacher: "Mr. Appiah" },
         { id: "2", className: "JSS 2A", day: "Monday", period: "2nd Period", subject: "Science", teacher: "Mrs. Amankwah" },
     ];

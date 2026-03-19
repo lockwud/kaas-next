@@ -6,14 +6,22 @@ import { Table } from "../../../../components/ui/Table";
 import { motion } from "framer-motion";
 
 export default function MaterialsPage() {
-    const columns: any[] = [
+    type MaterialRow = {
+        id: string;
+        title: string;
+        subject: string;
+        className: string;
+        dateAdded: string;
+    };
+
+    const columns: Array<{ header: string; accessor: keyof MaterialRow }> = [
         { header: "Material Title", accessor: "title" },
         { header: "Subject", accessor: "subject" },
         { header: "Class", accessor: "className" },
         { header: "Date Added", accessor: "dateAdded" },
     ];
 
-    const data: any[] = [
+    const data: MaterialRow[] = [
         { id: "1", title: "Algebra Basics.pdf", subject: "Mathematics", className: "JSS 2", dateAdded: "2024-02-20" },
         { id: "2", title: "Photosynthesis.mp4", subject: "Science", className: "JSS 1", dateAdded: "2024-02-21" },
     ];

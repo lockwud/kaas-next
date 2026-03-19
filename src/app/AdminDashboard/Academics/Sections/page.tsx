@@ -6,14 +6,22 @@ import { Table } from "../../../../components/ui/Table";
 import { motion } from "framer-motion";
 
 export default function SectionsPage() {
-    const columns: any[] = [
+    type SectionRow = {
+        id: string;
+        name: string;
+        category: string;
+        capacity: number;
+        status: string;
+    };
+
+    const columns: Array<{ header: string; accessor: keyof SectionRow }> = [
         { header: "Section Name", accessor: "name" },
         { header: "Category", accessor: "category" },
         { header: "Capacity", accessor: "capacity" },
         { header: "Status", accessor: "status" },
     ];
 
-    const data: any[] = [
+    const data: SectionRow[] = [
         { id: "1", name: "Section A", category: "Primary", capacity: 40, status: "Active" },
         { id: "2", name: "Section B", category: "Junior High", capacity: 35, status: "Active" },
     ];

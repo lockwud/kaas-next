@@ -2,7 +2,7 @@
 
 import React from "react";
 import { motion } from "framer-motion";
-import { Award, MoreHorizontal, Pencil, Trash2, X, User, Calendar, Phone, Mail, MapPin, BookOpen, GraduationCap, Shield, Eye, Search, Plus } from "lucide-react";
+import { Award, MoreHorizontal, Pencil, X, User, Calendar, Phone, Mail, MapPin, BookOpen, Shield, Eye, Search, Plus } from "lucide-react";
 import DashboardLayout from "../../../../components/DashboardLayout";
 import { Button } from "../../../../components/ui/Button";
 import { Input } from "../../../../components/ui/Input";
@@ -51,6 +51,8 @@ type StudentApi = {
 type ClassOption = {
   id: string;
   name: string;
+  className: string;
+  section: string;
 };
 
 type ClassApi = {
@@ -60,9 +62,14 @@ type ClassApi = {
   section?: string;
 };
 
+const normalizeClassLabel = (value: string) =>
+  value.trim().toLowerCase().replace(/\s+/g, " ");
+
 const mapClassOption = (item: ClassApi): ClassOption => ({
   id: item.id,
-  name: `${item.className ?? item.name ?? "Class"}${item.section ?? ""}`.trim(),
+  className: item.className ?? item.name ?? "Class",
+  section: item.section ?? "",
+  name: `${item.className ?? item.name ?? "Class"} ${item.section ?? ""}`.trim(),
 });
 
 const mapStudent = (item: StudentApi): StudentRow => ({
@@ -117,9 +124,70 @@ export default function StudentsDirectoryPage() {
         apiRequest<StudentApi[]>(API_ENDPOINTS.students),
         apiRequest<ClassApi[]>(API_ENDPOINTS.classes),
       ]);
-      setRows(studentsPayload.map(mapStudent));
+      const classLookupById = new Map(
+        classesPayload.map((item) => [
+          item.id,
+          {
+            className: item.className ?? item.name ?? "Class",
+            section: item.section ?? "",
+          },
+        ]),
+      );
+      const classLookupByLabel = new Map(
+        classesPayload.map((item) => {
+          const className = item.className ?? item.name ?? "Class";
+          const section = item.section ?? "";
+          const label = `${className} ${section}`.trim();
+          return [normalizeClassLabel(label), { id: item.id, className, section }];
+        }),
+      );
+      const fixes: Array<{ studentId: string; classId: string; className: string; section: string }> = [];
+      const mappedRows = studentsPayload.map((item) => {
+        const base = mapStudent(item);
+        if (base.classId && classLookupById.has(base.classId)) {
+          const lookup = classLookupById.get(base.classId);
+          return {
+            ...base,
+            className: lookup?.className ?? base.className,
+            section: lookup?.section ?? base.section,
+          };
+        }
+        const rawLabel = `${item.className ?? ""} ${item.section ?? ""}`.trim();
+        const labelKey = normalizeClassLabel(rawLabel || (item.className ?? ""));
+        const lookupByLabel = labelKey ? classLookupByLabel.get(labelKey) : undefined;
+        if (lookupByLabel && !item.classId) {
+          fixes.push({
+            studentId: item.id,
+            classId: lookupByLabel.id,
+            className: lookupByLabel.className,
+            section: lookupByLabel.section,
+          });
+          return {
+            ...base,
+            classId: lookupByLabel.id,
+            className: lookupByLabel.className,
+            section: lookupByLabel.section,
+          };
+        }
+        return base;
+      });
+      setRows(mappedRows);
       setClasses(classesPayload.map(mapClassOption));
       setClassData(classesPayload);
+      if (fixes.length > 0) {
+        void Promise.allSettled(
+          fixes.map((fix) =>
+            apiRequest<StudentApi>(`${API_ENDPOINTS.students}/${fix.studentId}`, {
+              method: "PATCH",
+              body: JSON.stringify({
+                classId: fix.classId,
+                className: fix.className,
+                section: fix.section,
+              }),
+            }),
+          ),
+        );
+      }
     } catch (err) {
       setRows([]);
       setClasses([]);
@@ -135,11 +203,24 @@ export default function StudentsDirectoryPage() {
   }, []);
 
   // Create lookup map for class sections by className
-  const classSectionMap = React.useMemo(() => {
-    const map = new Map<string, string>();
+  const classLookupById = React.useMemo(() => {
+    const map = new Map<string, { className: string; section: string }>();
     classData.forEach((cls) => {
-      if (cls.className) {
-        map.set(cls.className, cls.section ?? "");
+      map.set(cls.id, {
+        className: cls.className ?? cls.name ?? "Class",
+        section: cls.section ?? "",
+      });
+    });
+    return map;
+  }, [classData]);
+
+  const classLookupByName = React.useMemo(() => {
+    const map = new Map<string, { className: string; section: string }>();
+    classData.forEach((cls) => {
+      const className = cls.className ?? cls.name ?? "Class";
+      const key = normalizeClassLabel(className);
+      if (!map.has(key)) {
+        map.set(key, { className, section: cls.section ?? "" });
       }
     });
     return map;
@@ -147,11 +228,27 @@ export default function StudentsDirectoryPage() {
 
   // Update rows with section from class lookup
   const rowsWithSection = React.useMemo(() => {
-    return rows.map((row) => ({
-      ...row,
-      section: row.section || classSectionMap.get(row.className) || "",
-    }));
-  }, [rows, classSectionMap]);
+    return rows.map((row) => {
+      if (row.classId && classLookupById.has(row.classId)) {
+        const lookup = classLookupById.get(row.classId);
+        return {
+          ...row,
+          className: lookup?.className ?? row.className,
+          section: lookup?.section ?? row.section,
+        };
+      }
+      const nameKey = normalizeClassLabel(row.className);
+      const lookupByName = classLookupByName.get(nameKey);
+      if (lookupByName && !row.section) {
+        return {
+          ...row,
+          className: lookupByName.className,
+          section: lookupByName.section,
+        };
+      }
+      return row;
+    });
+  }, [rows, classLookupById, classLookupByName]);
 
   const filteredRows = rowsWithSection;
 
@@ -205,6 +302,7 @@ export default function StudentsDirectoryPage() {
 
   const handleAddStudent = async (newStudent: Omit<StudentRow, "id">) => {
     try {
+      const selectedClass = classes.find((c) => c.id === newStudent.classId);
       const created = await apiRequest<StudentApi>(API_ENDPOINTS.students, {
         method: "POST",
         body: JSON.stringify({
@@ -219,6 +317,8 @@ export default function StudentsDirectoryPage() {
           guardianEmail: newStudent.guardianEmail,
           guardianPrimaryContact: newStudent.guardianContact,
           classId: newStudent.classId,
+          className: selectedClass?.className ?? newStudent.className,
+          section: selectedClass?.section ?? newStudent.section,
         }),
       });
       const mapped = mapStudent(created);
@@ -230,7 +330,12 @@ export default function StudentsDirectoryPage() {
       const simulatedStudent: StudentRow = {
         ...newStudent,
         id: `temp-${Date.now()}`,
-        className: newStudent.classId ? classes.find(c => c.id === newStudent.classId)?.name || "Class 1" : "Unassigned",
+        className: newStudent.classId
+          ? classes.find(c => c.id === newStudent.classId)?.className || "Class 1"
+          : "Unassigned",
+        section: newStudent.classId
+          ? classes.find(c => c.id === newStudent.classId)?.section || ""
+          : "",
       };
       setRows((current) => [simulatedStudent, ...current]);
       setIsAddModalOpen(false);
@@ -264,10 +369,16 @@ export default function StudentsDirectoryPage() {
       const updated = await apiRequest<StudentApi>(`${API_ENDPOINTS.students}/${selectedStudent.id}`, {
         method: "PATCH",
         body: JSON.stringify({
-          className: selectedClass?.name,
+          classId: selectedClass?.id,
+          className: selectedClass?.className,
+          section: selectedClass?.section,
         }),
       });
-      setRows((current) => current.map((s) => (s.id === selectedStudent.id ? mapStudent(updated) : s)));
+      const mapped = mapStudent(updated);
+      const patched = selectedClass
+        ? { ...mapped, className: selectedClass.className, section: selectedClass.section, classId: selectedClass.id }
+        : mapped;
+      setRows((current) => current.map((s) => (s.id === selectedStudent.id ? patched : s)));
       setIsAssignClassModalOpen(false);
       success(`Student assigned to ${selectedClass?.name}`);
     } catch (err) {
@@ -280,6 +391,7 @@ export default function StudentsDirectoryPage() {
       const original = selectedStudent;
       const payload: Partial<{
         fullName: string;
+        classId: string;
         className: string;
         section: string;
         admissionNo: string;
@@ -291,7 +403,11 @@ export default function StudentsDirectoryPage() {
       if (updatedStudent.fullName.trim() && updatedStudent.fullName.trim() !== original?.fullName) {
         payload.fullName = updatedStudent.fullName.trim();
       }
-      if (
+      if (updatedStudent.classId && updatedStudent.classId !== original?.classId) {
+        payload.classId = updatedStudent.classId;
+        payload.className = updatedStudent.className.trim();
+        payload.section = updatedStudent.section;
+      } else if (
         updatedStudent.className &&
         updatedStudent.className !== "Unassigned" &&
         updatedStudent.className.trim() !== original?.className
@@ -342,8 +458,8 @@ export default function StudentsDirectoryPage() {
           <h2 className="text-2xl font-bold text-slate-900">Students Directory</h2>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="overflow-x-auto">
+        <div className="overflow-visible rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="overflow-x-auto overflow-y-visible">
             <table className="w-full border-collapse text-left">
               <thead>
                 <tr className="bg-[#0F172A] text-[11px] font-semibold uppercase tracking-wide text-white">
@@ -397,7 +513,7 @@ export default function StudentsDirectoryPage() {
                             }}
                             className="rounded-lg p-1.5 hover:bg-slate-100"
                           >
-                            <MoreHorizontal size={18} className="text-slate-500" />
+                            <MoreHorizontal size={18} className="text-slate-400" />
                           </button>
                           
                           {actionMenuOpen === student.id && (
@@ -409,38 +525,22 @@ export default function StudentsDirectoryPage() {
                                 onClick={() => openStudentDetail(student)}
                                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
                               >
-                                <Eye size={14} className="text-slate-500" />
-                                View Details
+                                <Eye size={14} className="text-slate-400" />
+                                View
                               </button>
                               <button
                                 onClick={() => openEditModal(student)}
                                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
                               >
-                                <Pencil size={14} className="text-blue-500" />
+                                <Pencil size={14} className="text-slate-400" />
                                 Edit
                               </button>
                               <button
                                 onClick={() => openAssignClassModal(student)}
                                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
                               >
-                                <BookOpen size={14} className="text-emerald-500" />
+                                <BookOpen size={14} className="text-slate-400" />
                                 Assign Class
-                              </button>
-                              <button
-                                onClick={() => promoteStudent(student.id)}
-                                disabled={promotingId === student.id}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
-                              >
-                                <GraduationCap size={14} className="text-purple-500" />
-                                {promotingId === student.id ? "Promoting..." : "Promote"}
-                              </button>
-                              <hr className="my-1" />
-                              <button
-                                onClick={() => requestDeleteStudent(student)}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-                              >
-                                <Trash2 size={14} />
-                                Delete
                               </button>
                             </div>
                           )}
@@ -839,7 +939,12 @@ function EditStudentModal({
               value={formData.classId}
               onChange={(e) => {
                 const selectedClass = classes.find(c => c.id === e.target.value);
-                setFormData({ ...formData, classId: e.target.value, className: selectedClass?.name || "Unknown" });
+                setFormData({
+                  ...formData,
+                  classId: e.target.value,
+                  className: selectedClass?.className || "Unknown",
+                  section: selectedClass?.section || "",
+                });
               }}
               options={[
                 { value: "", label: "Not Assigned" },
@@ -889,6 +994,7 @@ function AddStudentModal({
     guardianEmail: "",
     classId: "",
     className: "",
+    section: "",
   });
   const [isSaving, setIsSaving] = React.useState(false);
 
@@ -901,8 +1007,8 @@ function AddStudentModal({
     const classSelected = classes.find(c => c.id === formData.classId);
     onSave({
       ...formData,
-      section: "",
-      className: classSelected?.name || "Unassigned",
+      section: classSelected?.section || "",
+      className: classSelected?.className || "Unassigned",
       guardianContact: formData.guardianContact,
       admissionDate: new Date(formData.admissionDate).toLocaleDateString(),
     });
@@ -1015,7 +1121,12 @@ function AddStudentModal({
               value={formData.classId}
               onChange={(e) => {
                 const selectedClass = classes.find(c => c.id === e.target.value);
-                setFormData({ ...formData, classId: e.target.value, className: selectedClass?.name || "Unknown" });
+                setFormData({
+                  ...formData,
+                  classId: e.target.value,
+                  className: selectedClass?.className || "Unknown",
+                  section: selectedClass?.section || "",
+                });
               }}
               options={[
                 { value: "", label: "Not Assigned" },
