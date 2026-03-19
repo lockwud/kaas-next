@@ -21,7 +21,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
                 <div className="relative flex items-center">
                     {icon && (
                         <div className="absolute left-3 text-slate-400 pointer-events-none">
-                            {React.isValidElement(icon)
+                            {React.isValidElement<{ size?: number }>(icon)
                                 ? React.cloneElement(icon, { size: 18 })
                                 : icon}
                         </div>

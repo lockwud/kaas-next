@@ -9,6 +9,7 @@ interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
 
 export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
     ({ className = "", label, options, error, ...props }, ref) => {
+        const isMultiple = Boolean(props.multiple);
         return (
             <div className="w-full space-y-2">
                 {label && (
@@ -22,19 +23,23 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
                 <div className="relative">
                     <select
                         ref={ref}
-                        className={`flex h-11 w-full appearance-none rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:border-transparent disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200 border-gray-200 ${className}`}
+                        className={`flex w-full appearance-none rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:border-transparent disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200 border-gray-200 ${isMultiple ? "min-h-[10rem]" : "h-11"} ${className}`}
                         {...props}
                     >
-                        <option value="" disabled>
-                            Select {label}
-                        </option>
+                        {!isMultiple && (
+                            <option value="" disabled>
+                                Select {label}
+                            </option>
+                        )}
                         {options.map((option) => (
                             <option key={option.value} value={option.value}>
                                 {option.label}
                             </option>
                         ))}
                     </select>
-                    <ChevronDown className="absolute right-3 top-3 h-4 w-4 opacity-50 pointer-events-none" />
+                    {!isMultiple && (
+                        <ChevronDown className="absolute right-3 top-3 h-4 w-4 opacity-50 pointer-events-none" />
+                    )}
                 </div>
                 {error && <p className="text-sm text-red-500">{error}</p>}
             </div>

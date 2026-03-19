@@ -411,7 +411,16 @@ export default function ReportsPage() {
       });
     });
 
-    return filtered.sort((a, b) => a.label.localeCompare(b.label));
+    const deduped = new Map<string, { id: string; label: string }>();
+    filtered.forEach((opt) => {
+      if (!deduped.has(opt.id)) {
+        deduped.set(opt.id, opt);
+      }
+    });
+
+    return Array.from(deduped.values()).sort((a, b) =>
+      a.label.localeCompare(b.label),
+    );
   }, [assessmentRecords]);
 
   const yearOptions = React.useMemo(() => {

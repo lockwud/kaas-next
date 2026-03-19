@@ -54,6 +54,109 @@ const ASSESSMENT_EXAM_WEIGHT_MAX = 60;
 
 const toBackendTerm = (term: "first_term" | "second_term" | "third_term") => term.toUpperCase();
 
+type MultiSelectItem = { id: string; label: string };
+
+const MultiSelectList = ({
+  label,
+  items,
+  selectedIds,
+  onChange
+}: {
+  label: string;
+  items: MultiSelectItem[];
+  selectedIds: string[];
+  onChange: (next: string[]) => void;
+}) => {
+  const [query, setQuery] = React.useState("");
+  const [page, setPage] = React.useState(1);
+  const pageSize = 5;
+
+  const filtered = React.useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((item) => item.label.toLowerCase().includes(q));
+  }, [items, query]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const paged = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  React.useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  const toggle = (id: string) => {
+    if (selectedIds.includes(id)) {
+      onChange(selectedIds.filter((value) => value !== id));
+      return;
+    }
+    onChange([...selectedIds, id]);
+  };
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="text-sm font-medium text-slate-700">{label}</label>
+        <input
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setPage(1);
+          }}
+          placeholder="Search..."
+          className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none"
+        />
+      </div>
+
+      <div className="space-y-2">
+        {paged.map((item) => {
+          const checked = selectedIds.includes(item.id);
+          return (
+            <label
+              key={item.id}
+              className={`flex items-center gap-3 rounded-lg border px-3 py-2 text-xs transition ${checked ? "border-emerald-500 bg-emerald-50 text-emerald-900" : "border-slate-200 text-slate-700 hover:border-emerald-300"
+                }`}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => toggle(item.id)}
+                className="sr-only"
+              />
+              <span
+                className={`flex h-4 w-4 items-center justify-center rounded-full border ${checked ? "border-emerald-600 bg-emerald-600" : "border-slate-300 bg-white"
+                  }`}
+                aria-hidden="true"
+              >
+                {checked && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+              </span>
+              <span className="flex-1">{item.label}</span>
+            </label>
+          );
+        })}
+        {paged.length === 0 && (
+          <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-500">
+            No matches found.
+          </div>
+        )}
+      </div>
+
+      {filtered.length > pageSize && (
+        <Pagination
+          totalItems={filtered.length}
+          currentPage={safePage}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={() => undefined}
+          pageSizeOptions={[pageSize]}
+        />
+      )}
+    </div>
+  );
+};
+
 interface AssessmentStudentOption {
   id: string;
   fullName: string;
@@ -103,6 +206,7 @@ interface StudentApi {
   id: string;
   fullName?: string;
   name?: string;
+  classId?: string;
   className?: string;
   section?: string;
 }
@@ -177,9 +281,9 @@ export default function AcademicsDashboard() {
   const [subjectCategory, setSubjectCategory] = React.useState<"Core" | "Elective">("Core");
   const [subjectStatus, setSubjectStatus] = React.useState<"ACTIVE" | "INACTIVE">("ACTIVE");
   const [subjectAssignmentMode, setSubjectAssignmentMode] = React.useState<"all" | "specific">("all");
-  const [subjectClassId, setSubjectClassId] = React.useState("");
+  const [subjectClassIds, setSubjectClassIds] = React.useState<string[]>([]);
   const [subjectTeacherAssignmentMode, setSubjectTeacherAssignmentMode] = React.useState<"later" | "now">("later");
-  const [subjectTeacherId, setSubjectTeacherId] = React.useState("");
+  const [subjectTeacherIds, setSubjectTeacherIds] = React.useState<string[]>([]);
   const [subjectDescription, setSubjectDescription] = React.useState("");
   const [subjectErrorMessage, setSubjectErrorMessage] = React.useState("");
 
@@ -449,9 +553,9 @@ export default function AcademicsDashboard() {
     setSubjectCategory("Core");
     setSubjectStatus("ACTIVE");
     setSubjectAssignmentMode("all");
-    setSubjectClassId("");
+    setSubjectClassIds([]);
     setSubjectTeacherAssignmentMode("later");
-    setSubjectTeacherId("");
+    setSubjectTeacherIds([]);
     setSubjectDescription("");
     setSubjectErrorMessage("");
   };
@@ -812,17 +916,19 @@ export default function AcademicsDashboard() {
       return;
     }
 
-    if (subjectAssignmentMode === "specific" && !subjectClassId) {
+    if (subjectAssignmentMode === "specific" && subjectClassIds.length === 0) {
       setSubjectErrorMessage("Select a class scope or switch to all classes.");
       return;
     }
 
-    if (subjectTeacherAssignmentMode === "now" && !subjectTeacherId) {
+    if (subjectTeacherAssignmentMode === "now" && subjectTeacherIds.length === 0) {
       setSubjectErrorMessage("Select a subject teacher or assign later.");
       return;
     }
 
     try {
+      const resolvedClassIds = subjectAssignmentMode === "specific" ? subjectClassIds : [];
+      const resolvedTeacherIds = subjectTeacherAssignmentMode === "now" ? subjectTeacherIds : [];
       await apiRequest<SubjectApi>(API_ENDPOINTS.subjects, {
         method: "POST",
         body: JSON.stringify({
@@ -830,8 +936,10 @@ export default function AcademicsDashboard() {
           code: subjectCode.trim(),
           category: subjectCategory,
           status: subjectStatus,
-          classId: subjectAssignmentMode === "specific" ? subjectClassId : undefined,
-          teacherId: subjectTeacherAssignmentMode === "now" ? subjectTeacherId : undefined,
+          classIds: resolvedClassIds.length ? resolvedClassIds : undefined,
+          classId: resolvedClassIds.length === 1 ? resolvedClassIds[0] : undefined,
+          teacherIds: resolvedTeacherIds.length ? resolvedTeacherIds : undefined,
+          teacherId: resolvedTeacherIds.length === 1 ? resolvedTeacherIds[0] : undefined,
           description: subjectDescription.trim() || undefined,
         }),
       });
@@ -1065,7 +1173,7 @@ export default function AcademicsDashboard() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
+            className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white shadow-2xl"
           >
             <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
               <div>
@@ -1317,18 +1425,17 @@ export default function AcademicsDashboard() {
                     className={`rounded-md px-3 py-2 text-xs font-medium ${subjectAssignmentMode === "specific" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
                       }`}
                   >
-                    Specific Class
+                    Specific Classes
                   </button>
                 </div>
 
                 {subjectAssignmentMode === "specific" && (
                   <div className="mt-3">
-                    <Select
-                      label="Class"
-                      value={subjectClassId}
-                      onChange={(event) => setSubjectClassId(event.target.value)}
-                      options={classOptions}
-                      required
+                    <MultiSelectList
+                      label="Classes"
+                      items={classOptions.map((option) => ({ id: option.value, label: option.label }))}
+                      selectedIds={subjectClassIds}
+                      onChange={setSubjectClassIds}
                     />
                   </div>
                 )}
@@ -1361,12 +1468,11 @@ export default function AcademicsDashboard() {
 
                 {subjectTeacherAssignmentMode === "now" && (
                   <div className="mt-3">
-                    <Select
-                      label="Subject Teacher"
-                      value={subjectTeacherId}
-                      onChange={(event) => setSubjectTeacherId(event.target.value)}
-                      options={subjectTeachers.map((teacher) => ({ value: teacher.id, label: teacher.fullName }))}
-                      required
+                    <MultiSelectList
+                      label="Subject Teachers"
+                      items={subjectTeachers.map((teacher) => ({ id: teacher.id, label: teacher.fullName }))}
+                      selectedIds={subjectTeacherIds}
+                      onChange={setSubjectTeacherIds}
                     />
                   </div>
                 )}
