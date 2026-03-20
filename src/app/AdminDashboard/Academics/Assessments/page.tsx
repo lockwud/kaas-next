@@ -9,6 +9,7 @@ import { Button } from "../../../../components/ui/Button";
 import { Input } from "../../../../components/ui/Input";
 import { Pagination } from "../../../../components/ui/Pagination";
 import { Select } from "../../../../components/ui/Select";
+import { SearchableSelect } from "../../../../components/ui/SearchableSelect";
 import { useToast } from "@/hooks/useToast";
 import { apiRequest } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/lib/api-endpoints";
@@ -133,6 +134,7 @@ export default function AssessmentsPage() {
   const [scoreChanges, setScoreChanges] = React.useState<Record<string, AssessmentRow>>({});
   const [deleteTarget, setDeleteTarget] = React.useState<AssessmentRecord | null>(null);
   const [isDeleting, setIsDeleting] = React.useState(false);
+  const [genderFilter, setGenderFilter] = React.useState<'all' | 'male' | 'female'>('all');
 
   const load = async () => {
     setIsLoading(true);
@@ -182,6 +184,72 @@ export default function AssessmentsPage() {
   React.useEffect(() => {
     void load();
   }, [pathname]);
+
+  // Modal state for class/subject actions
+  const [isClassModalOpen, setIsClassModalOpen] = React.useState(false);
+  const [isSubjectModalOpen, setIsSubjectModalOpen] = React.useState(false);
+  const [className, setClassName] = React.useState("");
+  const [section, setSection] = React.useState("");
+  const [classError, setClassError] = React.useState("");
+  const [subjectName, setSubjectName] = React.useState("");
+  const [subjectCode, setSubjectCode] = React.useState("");
+  const [subjectError, setSubjectError] = React.useState("");
+
+  // Open/close modal handlers
+  const openClassModal = () => {
+    setIsClassModalOpen(true);
+    setClassName("");
+    setSection("");
+    setClassError("");
+  };
+  const closeClassModal = () => setIsClassModalOpen(false);
+  const openSubjectModal = () => {
+    setIsSubjectModalOpen(true);
+    setSubjectName("");
+    setSubjectCode("");
+    setSubjectError("");
+  };
+  const closeSubjectModal = () => setIsSubjectModalOpen(false);
+
+  // Create class handler
+  const handleCreateClass = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!className.trim() || !section.trim()) {
+      setClassError("Class name and section required.");
+      return;
+    }
+    try {
+      await apiRequest(API_ENDPOINTS.classes, {
+        method: "POST",
+        body: JSON.stringify({ className: className.trim(), section: section.trim() }),
+      });
+      closeClassModal();
+      success("Class created.");
+      void load();
+    } catch (err) {
+      setClassError(err instanceof Error ? err.message : "Unable to create class.");
+    }
+  };
+
+  // Create subject handler
+  const handleCreateSubject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!subjectName.trim() || !subjectCode.trim()) {
+      setSubjectError("Subject name and code required.");
+      return;
+    }
+    try {
+      await apiRequest(API_ENDPOINTS.subjects, {
+        method: "POST",
+        body: JSON.stringify({ name: subjectName.trim(), code: subjectCode.trim() }),
+      });
+      closeSubjectModal();
+      success("Subject created.");
+      void load();
+    } catch (err) {
+      setSubjectError(err instanceof Error ? err.message : "Unable to create subject.");
+    }
+  };
 
   const classOptions = React.useMemo(() => {
     if (classes.length > 0) {
@@ -273,10 +341,19 @@ export default function AssessmentsPage() {
 
   const activeAssessment = records.find((record) => record.id === activeAssessmentId) ?? null;
   const activeRows = activeAssessment?.rows ?? [];
-  const rowTotalPages = Math.max(1, Math.ceil(activeRows.length / rowPageSize));
+  // Filter by gender if gender info exists
+  const filteredRows = React.useMemo(() => {
+    if (genderFilter === 'all') return activeRows;
+    return activeRows.filter((row: any) => {
+      // Assume row.gender exists, fallback to all if not
+      if (!row.gender) return true;
+      return row.gender.toLowerCase() === genderFilter;
+    });
+  }, [activeRows, genderFilter]);
+  const rowTotalPages = Math.max(1, Math.ceil(filteredRows.length / rowPageSize));
   const safeRowPage = Math.min(Math.max(1, rowPage), rowTotalPages);
-  const paginatedRows = activeRows.slice((safeRowPage - 1) * rowPageSize, safeRowPage * rowPageSize);
-  const summary = computeSummary(activeRows);
+  const paginatedRows = filteredRows.slice((safeRowPage - 1) * rowPageSize, safeRowPage * rowPageSize);
+  const summary = computeSummary(filteredRows);
 
   React.useEffect(() => {
     setListPage(1);
@@ -366,6 +443,10 @@ export default function AssessmentsPage() {
   return (
     <DashboardLayout loading={isLoading}>
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+                <div className="flex gap-2 mb-4">
+                  <Button className="bg-emerald-600 text-white" onClick={openClassModal}>Add Class</Button>
+                  <Button className="bg-emerald-600 text-white" onClick={openSubjectModal}>Add Subject</Button>
+                </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -396,22 +477,32 @@ export default function AssessmentsPage() {
               </span>
             </div>
             <div className="mt-4 space-y-3">
-              <Select
+              <SearchableSelect
                 label="Class"
                 value={classFilter}
-                onChange={(event) => setClassFilter(event.target.value)}
+                onChange={setClassFilter}
                 options={[{ value: "all", label: "All Classes" }, ...classOptions]}
+                placeholder="Select class..."
+                searchPlaceholder="Search class..."
+                enableSearch={true}
+                enablePagination={true}
+                pageSize={5}
               />
-              <Select
+              <SearchableSelect
                 label="Subject"
                 value={subjectFilter}
-                onChange={(event) => setSubjectFilter(event.target.value)}
+                onChange={setSubjectFilter}
                 options={[{ value: "all", label: "All Subjects" }, ...subjectOptions]}
+                placeholder="Select subject..."
+                searchPlaceholder="Search subject..."
+                enableSearch={true}
+                enablePagination={true}
+                pageSize={5}
               />
-              <Select
+              <SearchableSelect
                 label="Term"
                 value={termFilter}
-                onChange={(event) => setTermFilter(event.target.value)}
+                onChange={setTermFilter}
                 options={[
                   { value: "all", label: "All Terms" },
                   ...normalizedTermOptions.map((term) => ({
@@ -419,12 +510,22 @@ export default function AssessmentsPage() {
                     label: formatTerm(term),
                   })),
                 ]}
+                placeholder="Select term..."
+                searchPlaceholder="Search term..."
+                enableSearch={true}
+                enablePagination={true}
+                pageSize={5}
               />
-              <Select
+              <SearchableSelect
                 label="Academic Year"
                 value={yearFilter}
-                onChange={(event) => setYearFilter(event.target.value)}
+                onChange={setYearFilter}
                 options={[{ value: "all", label: "All Years" }, ...yearOptions]}
+                placeholder="Select year..."
+                searchPlaceholder="Search year..."
+                enableSearch={true}
+                enablePagination={true}
+                pageSize={5}
               />
               <div className="relative">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -497,6 +598,21 @@ export default function AssessmentsPage() {
 
             {activeAssessment && (
               <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="mb-4 flex items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-700">Gender:</span>
+                  <button
+                    className={`px-3 py-1 rounded ${genderFilter === 'all' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'}`}
+                    onClick={() => setGenderFilter('all')}
+                  >All</button>
+                  <button
+                    className={`px-3 py-1 rounded ${genderFilter === 'male' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'}`}
+                    onClick={() => setGenderFilter('male')}
+                  >Male</button>
+                  <button
+                    className={`px-3 py-1 rounded ${genderFilter === 'female' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'}`}
+                    onClick={() => setGenderFilter('female')}
+                  >Female</button>
+                </div>
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Assessment Transcript</p>
@@ -733,6 +849,63 @@ export default function AssessmentsPage() {
         </div>
       </motion.div>
 
+      {/* Class Modal */}
+      {isClassModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-emerald-200 bg-white shadow-2xl p-6">
+            <h3 className="text-lg font-bold mb-4">Add Class</h3>
+            <form onSubmit={handleCreateClass} className="space-y-3">
+              <input
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Class Name"
+                value={className}
+                onChange={e => setClassName(e.target.value)}
+              />
+              <input
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Section"
+                value={section}
+                onChange={e => setSection(e.target.value)}
+              />
+              {classError && <div className="text-xs text-rose-600">{classError}</div>}
+              <div className="flex gap-2 mt-2">
+                <Button variant="outline" onClick={closeClassModal} type="button">Cancel</Button>
+                <Button className="bg-emerald-600 text-white" type="submit">Create</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Subject Modal */}
+      {isSubjectModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-emerald-200 bg-white shadow-2xl p-6">
+            <h3 className="text-lg font-bold mb-4">Add Subject</h3>
+            <form onSubmit={handleCreateSubject} className="space-y-3">
+              <input
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Subject Name"
+                value={subjectName}
+                onChange={e => setSubjectName(e.target.value)}
+              />
+              <input
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Subject Code"
+                value={subjectCode}
+                onChange={e => setSubjectCode(e.target.value)}
+              />
+              {subjectError && <div className="text-xs text-rose-600">{subjectError}</div>}
+              <div className="flex gap-2 mt-2">
+                <Button variant="outline" onClick={closeSubjectModal} type="button">Cancel</Button>
+                <Button className="bg-emerald-600 text-white" type="submit">Create</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Assessment Modal */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
           <motion.div

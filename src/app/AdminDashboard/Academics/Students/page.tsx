@@ -7,6 +7,7 @@ import DashboardLayout from "../../../../components/DashboardLayout";
 import { Button } from "../../../../components/ui/Button";
 import { Input } from "../../../../components/ui/Input";
 import { Select } from "../../../../components/ui/Select";
+import { SearchableSelect } from "../../../../components/ui/SearchableSelect";
 import { Pagination } from "../../../../components/ui/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { apiRequest } from "@/lib/api-client";
@@ -99,6 +100,8 @@ export default function StudentsDirectoryPage() {
   const [currentPage, setCurrentPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
   
+  // Global search state
+  const [searchQuery, setSearchQuery] = React.useState("");
   
   // Action menu state
   const [actionMenuOpen, setActionMenuOpen] = React.useState<string | null>(null);
@@ -218,9 +221,10 @@ export default function StudentsDirectoryPage() {
     const map = new Map<string, { className: string; section: string }>();
     classData.forEach((cls) => {
       const className = cls.className ?? cls.name ?? "Class";
-      const key = normalizeClassLabel(className);
+      const section = cls.section ?? "";
+      const key = normalizeClassLabel(`${className} ${section}`.trim());
       if (!map.has(key)) {
-        map.set(key, { className, section: cls.section ?? "" });
+        map.set(key, { className, section });
       }
     });
     return map;
@@ -250,7 +254,19 @@ export default function StudentsDirectoryPage() {
     });
   }, [rows, classLookupById, classLookupByName]);
 
-  const filteredRows = rowsWithSection;
+  // Apply global search filter
+  const filteredRows = React.useMemo(() => {
+    if (!searchQuery.trim()) return rowsWithSection;
+    const query = searchQuery.toLowerCase().trim();
+    return rowsWithSection.filter(
+      (student) =>
+        student.fullName.toLowerCase().includes(query) ||
+        student.className.toLowerCase().includes(query) ||
+        student.section.toLowerCase().includes(query) ||
+        student.guardianName.toLowerCase().includes(query) ||
+        student.guardianContact.includes(query)
+    );
+  }, [rowsWithSection, searchQuery]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
@@ -456,6 +472,21 @@ export default function StudentsDirectoryPage() {
     <DashboardLayout loading={isLoading}><motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-slate-900">Students Directory</h2>
+          
+          {/* Global Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input
+              type="text"
+              placeholder="Search students..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="h-10 w-64 rounded-full border border-slate-200 bg-white pl-10 pr-4 text-sm text-slate-900 placeholder-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+            />
+          </div>
         </div>
 
         <div className="overflow-visible rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -541,6 +572,13 @@ export default function StudentsDirectoryPage() {
                               >
                                 <BookOpen size={14} className="text-slate-400" />
                                 Assign Class
+                              </button>
+                              <button
+                                onClick={() => requestDeleteStudent(student)}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-rose-600 hover:bg-rose-50"
+                              >
+                                <X size={14} className="text-rose-500" />
+                                Delete
                               </button>
                             </div>
                           )}
@@ -786,14 +824,19 @@ export default function StudentsDirectoryPage() {
                 Select a class for <span className="font-semibold text-slate-900">{selectedStudent.fullName}</span>
               </p>
               
-              <Select
+              <SearchableSelect
                 label="Select Class"
                 value={assignClassId}
-                onChange={(e) => setAssignClassId(e.target.value)}
+                onChange={setAssignClassId}
                 options={[
                   { value: "", label: "Select a class..." },
                   ...classes.map(c => ({ value: c.id, label: c.name }))
                 ]}
+                placeholder="Select a class..."
+                searchPlaceholder="Search classes..."
+                enableSearch={true}
+                enablePagination={true}
+                pageSize={5}
               />
             </div>
 

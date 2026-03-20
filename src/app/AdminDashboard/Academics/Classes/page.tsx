@@ -9,6 +9,7 @@ import { Pagination } from "../../../../components/ui/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { apiRequest } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/lib/api-endpoints";
+import { loadClasses, saveClasses, CLASSES_STORAGE_KEY } from "@/lib/classes-storage";
 
 type ClassRow = {
   id: string;
@@ -45,33 +46,81 @@ export default function ClassesPage() {
   const load = async () => {
     setIsLoading(true);
     try {
-      const [classesPayload, studentsPayload] = await Promise.all([
-        apiRequest<ClassApi[]>(API_ENDPOINTS.classes),
-        apiRequest<StudentApi[]>(API_ENDPOINTS.students).catch(() => []),
-      ]);
+      let classesPayload: ClassApi[] = [];
+      
+      // Try to fetch from API first
+      try {
+        classesPayload = await apiRequest<ClassApi[]>(API_ENDPOINTS.classes);
+      } catch {
+        // If API fails, try to get from local storage
+        const localClasses = loadClasses();
+        if (localClasses.length > 0) {
+          classesPayload = localClasses.map((cls) => ({
+            id: cls.id,
+            className: cls.className,
+            section: cls.section,
+            classTeacher: cls.classTeacherName ? { fullName: cls.classTeacherName } : undefined,
+          }));
+        }
+      }
 
-      // Build student count map based on className only (all sections combined)
+      // If still no classes from API, try local storage as final fallback
+      if (classesPayload.length === 0) {
+        const localClasses = loadClasses();
+        if (localClasses.length > 0) {
+          classesPayload = localClasses.map((cls) => ({
+            id: cls.id,
+            className: cls.className,
+            section: cls.section,
+            classTeacher: cls.classTeacherName ? { fullName: cls.classTeacherName } : undefined,
+          }));
+        }
+      }
+
+      const studentsPayload = await apiRequest<StudentApi[]>(API_ENDPOINTS.students).catch(() => []);
+
+      // Build student count map based on className and section
       const studentCountMap = new Map<string, number>();
       studentsPayload.forEach((student) => {
-        const key = student.className ?? "";
-        if (key) {
+        const key = `${student.className ?? ""}|${student.section ?? ""}`;
+        if (student.className) {
           studentCountMap.set(key, (studentCountMap.get(key) ?? 0) + 1);
         }
       });
 
       const mappedClasses = classesPayload.map((item) => {
         const className = item.className ?? item.name ?? "";
-        const calculatedCount = studentCountMap.get(className) ?? 0;
+        const section = item.section ?? "";
+        const sectionKey = `${className}|${section}`;
+        const calculatedCount = studentCountMap.get(sectionKey) ?? 0;
         return {
           id: item.id,
           className: className,
-          section: item.section ?? "-",
+          section: section || "-",
           classTeacher: item.classTeacher?.fullName ?? "Unassigned",
           students: calculatedCount,
         };
       });
 
       setRows(mappedClasses);
+      
+      // Sync to local storage if we got data from API
+      if (mappedClasses.length > 0) {
+        try {
+          const localClasses = loadClasses();
+          if (localClasses.length === 0) {
+            saveClasses(mappedClasses.map(c => ({
+              id: c.id,
+              schoolId: "school_001",
+              className: c.className,
+              section: c.section === "-" ? "" : c.section,
+              classTeacherName: c.classTeacher === "Unassigned" ? undefined : c.classTeacher,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            })));
+          }
+        } catch {}
+      }
     } catch (err) {
       error(err instanceof Error ? err.message : "Unable to load classes.");
     } finally {

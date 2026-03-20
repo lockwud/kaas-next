@@ -7,6 +7,7 @@ import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { Pagination } from "../../../components/ui/Pagination";
 import { Select } from "../../../components/ui/Select";
+import { SearchableSelect } from "../../../components/ui/SearchableSelect";
 import { motion, Variants } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { CalendarDays, Download, FileSpreadsheet, Layers, Save, Search, Sparkles, Upload, UserRoundPlus, UsersRound, X } from "lucide-react";
@@ -295,6 +296,7 @@ export default function AcademicsDashboard() {
   const [attendanceTotal, setAttendanceTotal] = React.useState(90);
   const [attendanceDate, setAttendanceDate] = React.useState(new Date().toISOString().slice(0, 10));
   const [attendanceEntries, setAttendanceEntries] = React.useState<Record<string, number | undefined>>({});
+  const [attendanceEntryInputs, setAttendanceEntryInputs] = React.useState<Record<string, string>>({});
   const [attendanceSearch, setAttendanceSearch] = React.useState("");
   const [isSavingAttendance, setIsSavingAttendance] = React.useState(false);
   const [vacationDate, setVacationDate] = React.useState("");
@@ -1045,25 +1047,22 @@ export default function AcademicsDashboard() {
       setAttendanceTotal(record.total ?? 0);
       setAttendanceDate(record.date ?? new Date().toISOString().slice(0, 10));
       const entryMap: Record<string, number | undefined> = {};
+      const inputMap: Record<string, string> = {};
       record.entries?.forEach((entry) => {
         entryMap[entry.studentId] = entry.present;
+        inputMap[entry.studentId] = String(entry.present);
       });
       setAttendanceEntries(entryMap);
+      setAttendanceEntryInputs(inputMap);
     } catch (err) {
       if (err instanceof ApiRequestError && err.status === 404) {
         setAttendanceEntries({});
+        setAttendanceEntryInputs({});
       } else if (err instanceof ApiRequestError) {
-        error(err.message);
+        errorRef.current(err.message);
       }
     }
-  }, [
-    isUniversalModalOpen,
-    activeModalTitle,
-    attendanceClassId,
-    attendanceTerm,
-    attendanceYear,
-    error,
-  ]);
+  }, [isUniversalModalOpen, activeModalTitle, attendanceClassId, attendanceTerm, attendanceYear]);
 
   const loadVacationDateForModal = React.useCallback(async () => {
     if (!isUniversalModalOpen || activeModalTitle !== "Attendance") return;
@@ -1078,10 +1077,10 @@ export default function AcademicsDashboard() {
       setVacationDate(record.vacationDate ?? "");
     } catch (err) {
       if (err instanceof ApiRequestError && err.status !== 404) {
-        error(err.message);
+        errorRef.current(err.message);
       }
     }
-  }, [isUniversalModalOpen, activeModalTitle, attendanceTerm, attendanceYear, error]);
+  }, [isUniversalModalOpen, activeModalTitle, attendanceTerm, attendanceYear]);
 
   const loadReopeningDateForModal = React.useCallback(async () => {
     if (!isUniversalModalOpen || activeModalTitle !== "Attendance") return;
@@ -1096,10 +1095,10 @@ export default function AcademicsDashboard() {
       setReopeningDate(record.reopeningDate ?? "");
     } catch (err) {
       if (err instanceof ApiRequestError && err.status !== 404) {
-        error(err.message);
+        errorRef.current(err.message);
       }
     }
-  }, [isUniversalModalOpen, activeModalTitle, attendanceTerm, attendanceYear, error]);
+  }, [isUniversalModalOpen, activeModalTitle, attendanceTerm, attendanceYear]);
 
   React.useEffect(() => {
     void loadAttendanceForModal();
@@ -1118,6 +1117,7 @@ export default function AcademicsDashboard() {
     if (!isUniversalModalOpen || activeModalTitle !== "Attendance") return;
     if (!attendanceClassId) {
       setAttendanceEntries({});
+      setAttendanceEntryInputs({});
       return;
     }
     setAttendanceEntries((current) => {
@@ -1129,17 +1129,38 @@ export default function AcademicsDashboard() {
       });
       return next;
     });
+    setAttendanceEntryInputs((current) => {
+      const next = { ...current };
+      attendanceStudents.forEach((student) => {
+        if (next[student.id] === undefined) {
+          const existing = attendanceEntries[student.id];
+          next[student.id] = existing === undefined ? "" : String(existing);
+        }
+      });
+      return next;
+    });
   }, [attendanceStudents, attendanceClassId, isUniversalModalOpen, activeModalTitle]);
 
   const handleAttendanceEntryChange = (studentId: string, value: string) => {
-    if (value === "") {
+    setAttendanceEntryInputs((current) => ({ ...current, [studentId]: value }));
+  };
+
+  const handleAttendanceEntryBlur = (studentId: string) => {
+    const raw = attendanceEntryInputs[studentId] ?? "";
+    if (raw.trim() === "") {
       setAttendanceEntries((current) => ({ ...current, [studentId]: undefined }));
+      setAttendanceEntryInputs((current) => ({ ...current, [studentId]: "" }));
       return;
     }
-    const parsed = Number.parseInt(value, 10);
-    const safeValue = Number.isFinite(parsed) ? parsed : 0;
-    const clamped = Math.max(0, Math.min(safeValue, attendanceTotal));
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed)) {
+      setAttendanceEntries((current) => ({ ...current, [studentId]: undefined }));
+      setAttendanceEntryInputs((current) => ({ ...current, [studentId]: "" }));
+      return;
+    }
+    const clamped = Math.max(0, Math.min(parsed, attendanceTotal));
     setAttendanceEntries((current) => ({ ...current, [studentId]: clamped }));
+    setAttendanceEntryInputs((current) => ({ ...current, [studentId]: String(clamped) }));
   };
 
   const saveAttendance = async () => {
@@ -2178,18 +2199,28 @@ export default function AcademicsDashboard() {
                   </div>
 
                   <div className="grid gap-3 md:grid-cols-3">
-                    <Select
+                    <SearchableSelect
                       label="Class"
                       value={genericClass}
-                      onChange={(event) => setGenericClass(event.target.value)}
+                      onChange={setGenericClass}
                       options={assessmentClassOptions.map((option) => ({ value: option.id, label: option.label }))}
+                      placeholder="Select class..."
+                      searchPlaceholder="Search class..."
+                      enableSearch={true}
+                      enablePagination={true}
+                      pageSize={5}
                       required
                     />
-                    <Select
+                    <SearchableSelect
                       label="Subject"
                       value={genericSubject}
-                      onChange={(event) => setGenericSubject(event.target.value)}
+                      onChange={setGenericSubject}
                       options={assessmentSubjectOptions}
+                      placeholder="Select subject..."
+                      searchPlaceholder="Search subject..."
+                      enableSearch={true}
+                      enablePagination={true}
+                      pageSize={5}
                       required
                     />
                     <Input
@@ -2378,11 +2409,12 @@ export default function AcademicsDashboard() {
                               <td className="px-3 py-2 text-slate-500">{`${student.className} ${student.section}`.trim()}</td>
                               <td className="px-3 py-2">
                                   <input
-                                    type="number"
-                                    min={0}
-                                    max={attendanceTotal}
-                                  value={attendanceEntries[student.id] ?? ""}
+                                  type="text"
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
+                                  value={attendanceEntryInputs[student.id] ?? ""}
                                   onChange={(e) => handleAttendanceEntryChange(student.id, e.target.value)}
+                                  onBlur={() => handleAttendanceEntryBlur(student.id)}
                                   className="h-8 w-24 rounded-lg border border-slate-200 bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
                                   />
                               </td>

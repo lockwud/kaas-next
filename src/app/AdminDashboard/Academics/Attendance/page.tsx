@@ -8,6 +8,7 @@ import { Button } from "../../../../components/ui/Button";
 import { Input } from "../../../../components/ui/Input";
 import { Pagination } from "../../../../components/ui/Pagination";
 import { Select } from "../../../../components/ui/Select";
+import { SearchableSelect } from "../../../../components/ui/SearchableSelect";
 import { useToast } from "@/hooks/useToast";
 import { apiRequest, ApiRequestError } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/lib/api-endpoints";
@@ -354,32 +355,47 @@ export default function AttendancePage() {
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h3 className="text-sm font-semibold text-slate-700">Attendance Setup</h3>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <Select
+              <SearchableSelect
                 label="Class"
                 value={selectedClassId}
-                onChange={(e) => setSelectedClassId(e.target.value)}
+                onChange={setSelectedClassId}
                 options={classes.map((item) => ({
                   value: item.id,
                   label: buildClassLabel(item) || "Class",
                 }))}
+                placeholder="Select class..."
+                searchPlaceholder="Search class..."
+                enableSearch={true}
+                enablePagination={true}
+                pageSize={5}
               />
-              <Select
+              <SearchableSelect
                 label="Term"
                 value={selectedTerm}
-                onChange={(e) => setSelectedTerm(normalizeTerm(e.target.value))}
+                onChange={(value) => setSelectedTerm(normalizeTerm(value))}
                 options={terms.map((term) => ({
                   value: normalizeTerm(term),
                   label: formatTerm(term),
                 }))}
+                placeholder="Select term..."
+                searchPlaceholder="Search term..."
+                enableSearch={true}
+                enablePagination={true}
+                pageSize={5}
               />
-              <Select
+              <SearchableSelect
                 label="Academic Year"
                 value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value)}
+                onChange={setSelectedYear}
                 options={academicSessions.map((session) => ({
                   value: session.session ?? session.id,
                   label: session.session ?? session.id,
                 }))}
+                placeholder="Select year..."
+                searchPlaceholder="Search year..."
+                enableSearch={true}
+                enablePagination={true}
+                pageSize={5}
               />
               <Input
                 label="Total Attendance"

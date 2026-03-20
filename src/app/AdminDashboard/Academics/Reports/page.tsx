@@ -7,6 +7,7 @@ import DashboardLayout from "../../../../components/DashboardLayout";
 import { Button } from "../../../../components/ui/Button";
 import { Pagination } from "../../../../components/ui/Pagination";
 import { Select } from "../../../../components/ui/Select";
+import { SearchableSelect } from "../../../../components/ui/SearchableSelect";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import { Eye, FileDown, RefreshCw, Search, X, Printer } from "lucide-react";
@@ -1322,10 +1323,10 @@ export default function ReportsPage() {
               Reports & Filters
             </h3>
             <div className="mt-4 space-y-3">
-              <Select
+              <SearchableSelect
                 label="Class"
                 value={classFilter}
-                onChange={(e) => setClassFilter(e.target.value)}
+                onChange={setClassFilter}
                 options={[
                   { value: "all", label: "All Classes" },
                   ...classOptions.map((option) => ({
@@ -1333,24 +1334,32 @@ export default function ReportsPage() {
                     label: option.label,
                   })),
                 ]}
+                placeholder="Select class..."
+                searchPlaceholder="Search class..."
+                enableSearch={true}
+                enablePagination={true}
+                pageSize={5}
               />
-              <Select
+              <SearchableSelect
                 label="Term"
                 value={termFilter}
-                onChange={(e) =>
-                  setTermFilter(e.target.value as typeof termFilter)
-                }
+                onChange={(value) => setTermFilter(value as typeof termFilter)}
                 options={[
                   { value: "all", label: "All Terms" },
                   { value: "first_term", label: "First Term" },
                   { value: "second_term", label: "Second Term" },
                   { value: "third_term", label: "Third Term" },
                 ]}
+                placeholder="Select term..."
+                searchPlaceholder="Search term..."
+                enableSearch={true}
+                enablePagination={true}
+                pageSize={5}
               />
-              <Select
+              <SearchableSelect
                 label="Academic Year"
                 value={yearFilter}
-                onChange={(e) => setYearFilter(e.target.value)}
+                onChange={setYearFilter}
                 options={[
                   { value: "all", label: "All Years" },
                   ...yearOptions.map((option) => ({
@@ -1358,6 +1367,11 @@ export default function ReportsPage() {
                     label: option.label,
                   })),
                 ]}
+                placeholder="Select year..."
+                searchPlaceholder="Search year..."
+                enableSearch={true}
+                enablePagination={true}
+                pageSize={5}
               />
               <div className="relative">
                 <Search
