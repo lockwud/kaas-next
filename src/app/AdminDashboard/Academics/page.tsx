@@ -14,6 +14,7 @@ import { SchoolClass } from "../../../types/school";
 import { useToast } from "@/hooks/useToast";
 import { ApiRequestError, apiRequest } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/lib/api-endpoints";
+import type { AttendanceRecord, VacationDateRecord } from "@/lib/attendance-types";
 
 const normalize = (value: string) => value.trim().toLowerCase();
 const ACADEMIC_YEAR_START_MONTH = 7; // August
@@ -162,6 +163,7 @@ interface AssessmentStudentOption {
   fullName: string;
   className: string;
   section: string;
+  classId?: string;
 }
 
 interface AssessmentClassOption {
@@ -245,6 +247,7 @@ const mapClassApi = (item: ClassApi): SchoolClass => {
 const toAssessmentClassKey = (className: string, section: string) => `${normalize(className)}|${normalize(section)}`;
 
 const toAssessmentClassLabel = (className: string, section: string) => `${className} ${section}`.trim();
+const normalizeTermKey = (term: string) => term.trim().toLowerCase().replace(/\s+/g, "_");
 
 const toWeightedExamScore = (rawExam: number) => {
   const clamped = Math.max(0, Math.min(ASSESSMENT_MAX_EXAM_INPUT, rawExam));
@@ -286,6 +289,18 @@ export default function AcademicsDashboard() {
   const [subjectTeacherIds, setSubjectTeacherIds] = React.useState<string[]>([]);
   const [subjectDescription, setSubjectDescription] = React.useState("");
   const [subjectErrorMessage, setSubjectErrorMessage] = React.useState("");
+  const [attendanceClassId, setAttendanceClassId] = React.useState("");
+  const [attendanceTerm, setAttendanceTerm] = React.useState<"first_term" | "second_term" | "third_term">("first_term");
+  const [attendanceYear, setAttendanceYear] = React.useState(getCurrentAcademicYear());
+  const [attendanceTotal, setAttendanceTotal] = React.useState(90);
+  const [attendanceDate, setAttendanceDate] = React.useState(new Date().toISOString().slice(0, 10));
+  const [attendanceEntries, setAttendanceEntries] = React.useState<Record<string, number | undefined>>({});
+  const [attendanceSearch, setAttendanceSearch] = React.useState("");
+  const [isSavingAttendance, setIsSavingAttendance] = React.useState(false);
+  const [vacationDate, setVacationDate] = React.useState("");
+  const [isSavingVacationDate, setIsSavingVacationDate] = React.useState(false);
+  const [reopeningDate, setReopeningDate] = React.useState("");
+  const [isSavingReopeningDate, setIsSavingReopeningDate] = React.useState(false);
 
   const [studentStep, setStudentStep] = React.useState<StudentStep>("profile");
   const [studentRegistrationMode, setStudentRegistrationMode] = React.useState<StudentRegistrationMode>("single");
@@ -387,6 +402,49 @@ export default function AcademicsDashboard() {
     [classDirectory],
   );
 
+  const selectedAttendanceClass = React.useMemo(
+    () => classDirectory.find((item) => item.id === attendanceClassId) ?? null,
+    [classDirectory, attendanceClassId],
+  );
+
+  const attendanceStudents = React.useMemo(() => {
+    if (!selectedAttendanceClass) return [];
+    const targetClassName = normalize(selectedAttendanceClass.className);
+    const targetSection = normalize(selectedAttendanceClass.section);
+    const targetLabel = normalize(`${selectedAttendanceClass.className}${selectedAttendanceClass.section}`);
+    const targetSpacedLabel = normalize(`${selectedAttendanceClass.className} ${selectedAttendanceClass.section}`);
+
+    return managedStudents.filter((student) => {
+      if (student.classId && student.classId === selectedAttendanceClass.id) {
+        return true;
+      }
+      const studentClass = normalize(student.className);
+      const studentSection = normalize(student.section);
+      const studentLabel = normalize(`${student.className}${student.section}`);
+      const studentSpacedLabel = normalize(`${student.className} ${student.section}`);
+      if (studentLabel && (studentLabel === targetLabel || studentLabel === targetSpacedLabel)) {
+        return true;
+      }
+      if (studentSpacedLabel && (studentSpacedLabel === targetLabel || studentSpacedLabel === targetSpacedLabel)) {
+        return true;
+      }
+      if (!targetClassName) return false;
+      if (targetSection) {
+        if (studentClass !== targetClassName) return false;
+        return !studentSection || studentSection === targetSection;
+      }
+      return studentClass === targetClassName;
+    });
+  }, [managedStudents, selectedAttendanceClass]);
+
+  const filteredAttendanceStudents = React.useMemo(() => {
+    if (!attendanceSearch.trim()) return attendanceStudents;
+    const query = attendanceSearch.trim().toLowerCase();
+    return attendanceStudents.filter((student) =>
+      student.fullName.toLowerCase().includes(query),
+    );
+  }, [attendanceStudents, attendanceSearch]);
+
   const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
@@ -459,6 +517,7 @@ export default function AcademicsDashboard() {
                 fullName: student.fullName ?? student.name ?? "Unnamed Student",
                 className: lookup?.className ?? fallbackName,
                 section: lookup?.section ?? fallbackSection,
+                classId: student.classId,
               };
             }
             const labelKey = normalize(`${fallbackName} ${fallbackSection}`.trim() || fallbackName);
@@ -469,6 +528,7 @@ export default function AcademicsDashboard() {
                 fullName: student.fullName ?? student.name ?? "Unnamed Student",
                 className: lookupByLabel.className || fallbackName,
                 section: lookupByLabel.section || fallbackSection,
+                classId: student.classId,
               };
             }
             return {
@@ -476,6 +536,7 @@ export default function AcademicsDashboard() {
               fullName: student.fullName ?? student.name ?? "Unnamed Student",
               className: fallbackName,
               section: fallbackSection,
+              classId: student.classId,
             };
           }),
         );
@@ -644,6 +705,17 @@ export default function AcademicsDashboard() {
     setGenericReason("");
     setGenericLocation("");
     setGenericStartTime("");
+    if (cardTitle === "Attendance") {
+      setAttendanceClassId("");
+      setAttendanceTerm("first_term");
+      setAttendanceYear(currentAcademicYear);
+      setAttendanceTotal(90);
+      setAttendanceDate(new Date().toISOString().slice(0, 10));
+      setAttendanceEntries({});
+      setAttendanceSearch("");
+      setVacationDate("");
+      setReopeningDate("");
+    }
     setAssessmentSearch("");
     setAssessmentEntries([]);
     setAssessmentPage(1);
@@ -956,6 +1028,227 @@ export default function AcademicsDashboard() {
         return;
       }
       setSubjectErrorMessage(err instanceof Error ? err.message : "Unable to create subject.");
+    }
+  };
+
+  const loadAttendanceForModal = React.useCallback(async () => {
+    if (!isUniversalModalOpen || activeModalTitle !== "Attendance") return;
+    if (!attendanceClassId || !attendanceYear) return;
+
+    try {
+      const params = new URLSearchParams({
+        classId: attendanceClassId,
+        term: attendanceTerm,
+        academicYear: attendanceYear,
+      });
+      const record = await apiRequest<AttendanceRecord>(`${API_ENDPOINTS.attendance}?${params.toString()}`);
+      setAttendanceTotal(record.total ?? 0);
+      setAttendanceDate(record.date ?? new Date().toISOString().slice(0, 10));
+      const entryMap: Record<string, number | undefined> = {};
+      record.entries?.forEach((entry) => {
+        entryMap[entry.studentId] = entry.present;
+      });
+      setAttendanceEntries(entryMap);
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.status === 404) {
+        setAttendanceEntries({});
+      } else if (err instanceof ApiRequestError) {
+        error(err.message);
+      }
+    }
+  }, [
+    isUniversalModalOpen,
+    activeModalTitle,
+    attendanceClassId,
+    attendanceTerm,
+    attendanceYear,
+    error,
+  ]);
+
+  const loadVacationDateForModal = React.useCallback(async () => {
+    if (!isUniversalModalOpen || activeModalTitle !== "Attendance") return;
+    if (!attendanceYear) return;
+
+    try {
+      const params = new URLSearchParams({
+        term: attendanceTerm,
+        academicYear: attendanceYear,
+      });
+      const record = await apiRequest<VacationDateRecord>(`${API_ENDPOINTS.vacationDates}?${params.toString()}`);
+      setVacationDate(record.vacationDate ?? "");
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.status !== 404) {
+        error(err.message);
+      }
+    }
+  }, [isUniversalModalOpen, activeModalTitle, attendanceTerm, attendanceYear, error]);
+
+  const loadReopeningDateForModal = React.useCallback(async () => {
+    if (!isUniversalModalOpen || activeModalTitle !== "Attendance") return;
+    if (!attendanceYear) return;
+
+    try {
+      const params = new URLSearchParams({
+        term: attendanceTerm,
+        academicYear: attendanceYear,
+      });
+      const record = await apiRequest<{ reopeningDate?: string }>(`${API_ENDPOINTS.reopeningDates}?${params.toString()}`);
+      setReopeningDate(record.reopeningDate ?? "");
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.status !== 404) {
+        error(err.message);
+      }
+    }
+  }, [isUniversalModalOpen, activeModalTitle, attendanceTerm, attendanceYear, error]);
+
+  React.useEffect(() => {
+    void loadAttendanceForModal();
+    void loadVacationDateForModal();
+    void loadReopeningDateForModal();
+  }, [loadAttendanceForModal, loadVacationDateForModal, loadReopeningDateForModal]);
+
+  React.useEffect(() => {
+    if (!isUniversalModalOpen) return;
+    if (activeModalTitle === "Attendance" || activeModalTitle === "Assessments") {
+      void loadDirectoryData({ classes: true, students: true, subjects: true });
+    }
+  }, [isUniversalModalOpen, activeModalTitle, loadDirectoryData]);
+
+  React.useEffect(() => {
+    if (!isUniversalModalOpen || activeModalTitle !== "Attendance") return;
+    if (!attendanceClassId) {
+      setAttendanceEntries({});
+      return;
+    }
+    setAttendanceEntries((current) => {
+      const next = { ...current };
+      attendanceStudents.forEach((student) => {
+        if (next[student.id] === undefined) {
+          next[student.id] = 0;
+        }
+      });
+      return next;
+    });
+  }, [attendanceStudents, attendanceClassId, isUniversalModalOpen, activeModalTitle]);
+
+  const handleAttendanceEntryChange = (studentId: string, value: string) => {
+    if (value === "") {
+      setAttendanceEntries((current) => ({ ...current, [studentId]: undefined }));
+      return;
+    }
+    const parsed = Number.parseInt(value, 10);
+    const safeValue = Number.isFinite(parsed) ? parsed : 0;
+    const clamped = Math.max(0, Math.min(safeValue, attendanceTotal));
+    setAttendanceEntries((current) => ({ ...current, [studentId]: clamped }));
+  };
+
+  const saveAttendance = async () => {
+    if (!attendanceClassId) {
+      error("Select a class first.");
+      return;
+    }
+    if (!attendanceYear) {
+      error("Select academic year.");
+      return;
+    }
+    if (attendanceTotal <= 0) {
+      error("Total attendance must be greater than zero.");
+      return;
+    }
+
+    const payload: AttendanceRecord = {
+      classId: attendanceClassId,
+      classLabel: `${selectedAttendanceClass?.className ?? ""}${selectedAttendanceClass?.section ?? ""}`.trim(),
+      term: attendanceTerm,
+      academicYear: attendanceYear,
+      total: attendanceTotal,
+      date: attendanceDate || undefined,
+      entries: attendanceStudents.map((student) => ({
+        studentId: student.id,
+        present: Math.max(0, Math.min(attendanceEntries[student.id] ?? 0, attendanceTotal)),
+      })),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setIsSavingAttendance(true);
+    try {
+      await apiRequest(API_ENDPOINTS.attendance, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      success("Attendance saved successfully.");
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.status !== 404) {
+        error(err.message);
+      }
+    } finally {
+      setIsSavingAttendance(false);
+    }
+  };
+
+  const saveVacationDate = async () => {
+    if (!attendanceYear) {
+      error("Select academic year.");
+      return;
+    }
+    if (!vacationDate) {
+      error("Select a vacation date.");
+      return;
+    }
+
+    const payload: VacationDateRecord = {
+      term: attendanceTerm,
+      academicYear: attendanceYear,
+      vacationDate,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setIsSavingVacationDate(true);
+    try {
+      await apiRequest(API_ENDPOINTS.vacationDates, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      success("Vacation date saved.");
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.status !== 404) {
+        error(err.message);
+      }
+    } finally {
+      setIsSavingVacationDate(false);
+    }
+  };
+
+  const saveReopeningDate = async () => {
+    if (!attendanceYear) {
+      error("Select academic year.");
+      return;
+    }
+    if (!reopeningDate) {
+      error("Select a reopening date.");
+      return;
+    }
+
+    const payload = {
+      term: attendanceTerm,
+      academicYear: attendanceYear,
+      reopeningDate,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setIsSavingReopeningDate(true);
+    try {
+      await apiRequest(API_ENDPOINTS.reopeningDates, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      success("Reopening date saved.");
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.status !== 404) {
+        error(err.message);
+      }
+    } finally {
+      setIsSavingReopeningDate(false);
     }
   };
 
@@ -1847,6 +2140,12 @@ export default function AcademicsDashboard() {
                   }
                 }
 
+                if (activeModalTitle === "Attendance") {
+                  await saveAttendance();
+                  setIsUniversalModalOpen(false);
+                  return;
+                }
+
                 console.log(`Creating ${activeModalTitle}:`, {
                   genericTitle,
                   genericDescription,
@@ -1994,7 +2293,170 @@ export default function AcademicsDashboard() {
                 </div>
               )}
 
-              {!isAssessmentModal && (
+              {!isAssessmentModal && activeModalTitle === "Attendance" && (
+                <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Select
+                      label="Class"
+                      value={attendanceClassId}
+                      onChange={(e) => setAttendanceClassId(e.target.value)}
+                      options={classOptions}
+                      required
+                    />
+                    <Select
+                      label="Term"
+                      value={attendanceTerm}
+                      onChange={(e) => setAttendanceTerm(normalizeTermKey(e.target.value) as typeof attendanceTerm)}
+                      options={[
+                        { value: "first_term", label: "First Term" },
+                        { value: "second_term", label: "Second Term" },
+                        { value: "third_term", label: "Third Term" },
+                      ]}
+                      required
+                    />
+                    <Select
+                      label="Academic Year"
+                      value={attendanceYear}
+                      onChange={(e) => setAttendanceYear(e.target.value)}
+                      options={academicYearOptions.map((year) => ({ value: year, label: year }))}
+                      required
+                    />
+                    <Input
+                      label="Total Attendance"
+                      type="number"
+                      min={1}
+                      value={attendanceTotal}
+                      onChange={(e) => setAttendanceTotal(Number.parseInt(e.target.value, 10) || 0)}
+                      required
+                    />
+                    <Input
+                      label="Attendance Date"
+                      type="date"
+                      value={attendanceDate}
+                      onChange={(e) => setAttendanceDate(e.target.value)}
+                    />
+                    <div className="flex items-end">
+                      <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                        <div className="font-semibold text-slate-900">
+                          {selectedAttendanceClass ? `${selectedAttendanceClass.className}${selectedAttendanceClass.section}` : "Select class"}
+                        </div>
+                        <p className="mt-1">{attendanceStudents.length} student(s) loaded</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+                    <div className="flex flex-col gap-3 border-b border-slate-100 p-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-700">Student Attendance</h4>
+                        <p className="text-[11px] text-slate-500">Enter present days for each student.</p>
+                      </div>
+                      <div className="relative w-full md:max-w-xs">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          value={attendanceSearch}
+                          onChange={(e) => setAttendanceSearch(e.target.value)}
+                          placeholder="Search student..."
+                          className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                        />
+                      </div>
+                    </div>
+                    <div className="max-h-[360px] overflow-auto">
+                      <table className="w-full border-collapse text-left">
+                        <thead>
+                          <tr className="bg-slate-900 text-[10px] font-semibold uppercase tracking-wide text-white">
+                            <th className="px-3 py-2">Student</th>
+                            <th className="px-3 py-2">Class</th>
+                            <th className="px-3 py-2">Present</th>
+                            <th className="px-3 py-2">Out Of</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredAttendanceStudents.map((student) => (
+                            <tr key={student.id} className="border-t border-slate-100 text-xs text-slate-700 hover:bg-slate-50/70">
+                              <td className="px-3 py-2 font-medium">{student.fullName}</td>
+                              <td className="px-3 py-2 text-slate-500">{`${student.className} ${student.section}`.trim()}</td>
+                              <td className="px-3 py-2">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={attendanceTotal}
+                                  value={attendanceEntries[student.id] ?? ""}
+                                  onChange={(e) => handleAttendanceEntryChange(student.id, e.target.value)}
+                                  className="h-8 w-24 rounded-lg border border-slate-200 bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                                  />
+                              </td>
+                              <td className="px-3 py-2 text-[11px] text-slate-500">{attendanceTotal}</td>
+                            </tr>
+                          ))}
+                          {filteredAttendanceStudents.length === 0 && (
+                            <tr>
+                              <td colSpan={4} className="px-3 py-6 text-center text-xs text-slate-500">
+                                {attendanceClassId ? "No students found for this class." : "Select a class to load students."}
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <h4 className="text-sm font-semibold text-slate-700">Term Dates</h4>
+                      <p className="mt-1 text-[11px] text-slate-500">Set vacation and reopening dates for terminal reports.</p>
+                      <div className="mt-3 space-y-3">
+                        <Input
+                          label="Vacation Date"
+                          type="date"
+                          value={vacationDate}
+                          onChange={(e) => setVacationDate(e.target.value)}
+                        />
+                        <Input
+                          label="Reopening Date"
+                          type="date"
+                          value={reopeningDate}
+                          onChange={(e) => setReopeningDate(e.target.value)}
+                        />
+                        <Button
+                          type="button"
+                          className="h-9 w-full bg-slate-900 text-xs hover:bg-slate-800"
+                          onClick={() => void saveVacationDate()}
+                          disabled={isSavingVacationDate}
+                        >
+                          {isSavingVacationDate ? "Saving..." : "Save Vacation Date"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-9 w-full text-xs"
+                          onClick={() => void saveReopeningDate()}
+                          disabled={isSavingReopeningDate}
+                        >
+                          {isSavingReopeningDate ? "Saving..." : "Save Reopening Date"}
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-xs text-emerald-900">
+                      <p className="font-semibold">Tip</p>
+                      <p className="mt-1">
+                        Enter a single integer per student (e.g. 60) and set the total attendance (e.g. 90). The report will display 60/90.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                    <Button type="button" variant="outline" onClick={() => setIsUniversalModalOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={isSavingAttendance}>
+                      {isSavingAttendance ? "Saving..." : "Save Attendance"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {!isAssessmentModal && activeModalTitle !== "Attendance" && (
                 <>
               {/* Common Fields: Student Name (for individual records) */}
               {(activeModalTitle === "Attendance" || activeModalTitle === "Student Leaves") && (

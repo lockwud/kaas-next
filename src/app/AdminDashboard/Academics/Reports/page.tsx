@@ -13,6 +13,7 @@ import { Eye, FileDown, RefreshCw, Search, X, Printer } from "lucide-react";
 import { useToast } from "@/hooks/useToast";
 import { apiRequest } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/lib/api-endpoints";
+import type { AttendanceRecord, VacationDateRecord, ReopeningDateRecord } from "@/lib/attendance-types";
 import { useReactToPrint } from "react-to-print";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -27,6 +28,7 @@ type AssessmentStoredRecord = {
   subject: string;
   term: "FIRST_TERM" | "SECOND_TERM" | "THIRD_TERM";
   academicYear?: string | null;
+  vacationDate?: string | null;
   maxScore?: number;
   weights?: Record<string, number>;
   savedAt?: string;
@@ -61,6 +63,8 @@ type ReportCard = {
   classId?: string;
   term: "first_term" | "second_term" | "third_term";
   academicYear: string;
+  vacationDate?: string;
+  reopeningDate?: string;
   subjects: ReportSubjectRow[];
   overallScore: number;
   overallGrade: string;
@@ -85,6 +89,9 @@ const formatTerm = (
     .replace("_", " ")
     .toLowerCase()
     .replace(/\b\w/g, (char) => char.toUpperCase());
+
+const normalizeTermKey = (term?: string) =>
+  term ? term.trim().toLowerCase().replace(/\s+/g, "_") : "";
 
 const scoreToGrade = (score: number) => {
   if (score >= 85) return "A";
@@ -187,8 +194,8 @@ const ReportBody = ({ report }: { report: ReportCard }) => {
               <span className="report-label">Class:</span> {report.classLabel}
             </p>
             <p>
-              <span className="report-label">Student ID:</span>{" "}
-              {report.studentId}
+              <span className="report-label">Vacation Date:</span>{" "}
+              {report.vacationDate || "-"}
             </p>
             <p>
               <span className="report-label">Attendance:</span>{" "}
@@ -288,7 +295,8 @@ const ReportBody = ({ report }: { report: ReportCard }) => {
               <span className="report-label">Class Position:</span>
             </p>
             <p>
-              <span className="report-label">Reopening Date:</span>
+              <span className="report-label">Reopening Date:</span>{" "}
+              {report.reopeningDate || "-"}
             </p>
           </div>
           <p className="mt-3 text-slate-600">{report.summary}</p>
@@ -346,6 +354,9 @@ export default function ReportsPage() {
   const printRef = React.useRef<HTMLDivElement | null>(null);
   const [reportScale, setReportScale] = React.useState(1);
   const [reportStatus, setReportStatus] = React.useState<ReportStatusMap>({});
+  const [attendanceRecords, setAttendanceRecords] = React.useState<AttendanceRecord[]>([]);
+  const [vacationDates, setVacationDates] = React.useState<VacationDateRecord[]>([]);
+  const [reopeningDates, setReopeningDates] = React.useState<ReopeningDateRecord[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [isBulkExporting, setIsBulkExporting] = React.useState(false);
   const [studentPage, setStudentPage] = React.useState(1);
@@ -357,13 +368,19 @@ export default function ReportsPage() {
   const load = async () => {
     setIsLoading(true);
     try {
-      const [assessments, reports] = await Promise.all([
+      const [assessments, reports, attendancePayload, vacationPayload, reopeningPayload] = await Promise.all([
         apiRequest<AssessmentStoredRecord[]>(API_ENDPOINTS.assessments),
         apiRequest<Array<{ id: string; printedAt?: string | null }>>(
           API_ENDPOINTS.reports,
         ).catch(() => []), // Handle reports API failure gracefully
+        apiRequest<AttendanceRecord[]>(API_ENDPOINTS.attendance).catch(() => null),
+        apiRequest<VacationDateRecord[]>(API_ENDPOINTS.vacationDates).catch(() => null),
+        apiRequest<ReopeningDateRecord[]>(API_ENDPOINTS.reopeningDates).catch(() => null),
       ]);
       setAssessmentRecords(assessments || []);
+      setAttendanceRecords(attendancePayload ?? []);
+      setVacationDates(vacationPayload ?? []);
+      setReopeningDates(reopeningPayload ?? []);
       const count = Array.isArray(assessments) ? assessments.length : 0;
       if (count > 0) {
         success(`${count} assessment(s) loaded for reporting.`);
@@ -448,6 +465,39 @@ export default function ReportsPage() {
     });
   }, [assessmentRecords, classFilter, termFilter, yearFilter]);
 
+  const attendanceLookup = React.useMemo(() => {
+    const map = new Map<string, { present: number; total: number }>();
+    attendanceRecords.forEach((record) => {
+      const termKey = normalizeTermKey(record.term);
+      if (!termKey || !record.academicYear) return;
+      record.entries?.forEach((entry) => {
+        const key = `${entry.studentId}|${termKey}|${record.academicYear}`;
+        map.set(key, { present: entry.present, total: record.total });
+      });
+    });
+    return map;
+  }, [attendanceRecords]);
+
+  const vacationDateLookup = React.useMemo(() => {
+    const map = new Map<string, string>();
+    vacationDates.forEach((record) => {
+      const termKey = normalizeTermKey(record.term);
+      if (!termKey || !record.academicYear) return;
+      map.set(`${termKey}|${record.academicYear}`, record.vacationDate);
+    });
+    return map;
+  }, [vacationDates]);
+
+  const reopeningDateLookup = React.useMemo(() => {
+    const map = new Map<string, string>();
+    reopeningDates.forEach((record) => {
+      const termKey = normalizeTermKey(record.term);
+      if (!termKey || !record.academicYear) return;
+      map.set(`${termKey}|${record.academicYear}`, record.reopeningDate);
+    });
+    return map;
+  }, [reopeningDates]);
+
   const reportCards = React.useMemo(() => {
     if (filteredRecords.length === 0) return [] as ReportCard[];
 
@@ -528,6 +578,12 @@ export default function ReportsPage() {
       const requiredSubjects = Array.from(
         subjectMap.get(subjectKey) ?? [],
       ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+      const vacationDate = vacationDateLookup.get(
+        `${data.term}|${data.academicYear}`,
+      );
+      const reopeningDate = reopeningDateLookup.get(
+        `${data.term}|${data.academicYear}`,
+      );
 
       const subjectRows: ReportSubjectRow[] = requiredSubjects.map(
         (subject) => {
@@ -562,7 +618,17 @@ export default function ReportsPage() {
             )
           : 0;
       const overallGrade = scoreToGrade(overallScore);
-      const attendance = scoreToAttendance(overallScore);
+      const attendanceKey = `${data.studentId}|${data.term}|${data.academicYear}`;
+      const attendanceValue = attendanceLookup.get(attendanceKey);
+      const attendance = attendanceValue
+        ? {
+            present: attendanceValue.present,
+            total: attendanceValue.total,
+            percent: attendanceValue.total
+              ? Math.round((attendanceValue.present / attendanceValue.total) * 100)
+              : 0,
+          }
+        : scoreToAttendance(overallScore);
       const ready = subjectRows.some((s) => typeof s.score === "number");
       const reportKey = buildReportKey(
         data.studentId,
@@ -580,6 +646,8 @@ export default function ReportsPage() {
         classId: data.classId,
         term: data.term,
         academicYear: data.academicYear,
+        vacationDate,
+        reopeningDate,
         subjects: subjectRows,
         overallScore,
         overallGrade,
@@ -591,7 +659,7 @@ export default function ReportsPage() {
         printedAt: status?.printedAt,
       };
     });
-  }, [filteredRecords, reportStatus]);
+  }, [filteredRecords, reportStatus, attendanceLookup, vacationDateLookup, reopeningDateLookup]);
 
   const filteredStudents = React.useMemo(() => {
     const query = studentSearch.trim().toLowerCase();
@@ -1511,17 +1579,6 @@ export default function ReportsPage() {
                 <X size={16} />
               </button>
             </div>
-            <div className="report-watermark print-watermark" aria-hidden="true">
-              <Image
-                src="/KAASLOGO.jpeg"
-                alt="School Logo Watermark"
-                width={400}
-                height={400}
-                style={{ width: '100%', height: 'auto' }}
-                unoptimized
-                priority
-              />
-            </div>
             <div className="flex h-full w-full items-start justify-center overflow-hidden print-content-wrapper">
               <div
                 className="report-preview"
@@ -1529,7 +1586,18 @@ export default function ReportsPage() {
                   ["--report-scale" as string]: reportScale,
                 }}
               >
-                <div ref={printRef} className="print-modal-content report-theme" id="print-report">
+                <div ref={printRef} className="relative print-modal-content report-theme" id="print-report">
+                  <div className="report-watermark print-watermark" aria-hidden="true">
+                    <Image
+                      src="/KAASLOGO.jpeg"
+                      alt="School Logo Watermark"
+                      width={400}
+                      height={400}
+                      style={{ width: "100%", height: "auto" }}
+                      unoptimized
+                      priority
+                    />
+                  </div>
                   <div className="flex items-center justify-between px-6 py-4 print-header report-header-bar">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 overflow-hidden rounded-full border border-white/40 bg-white/90">
@@ -1572,8 +1640,8 @@ export default function ReportsPage() {
                           {activeReport.classLabel}
                         </p>
                         <p>
-                          <span className="report-label">Student ID:</span>{" "}
-                          {activeReport.studentId}
+                          <span className="report-label">Vacation Date:</span>{" "}
+                          {activeReport.vacationDate || "-"}
                         </p>
                         <p>
                           <span className="report-label">Attendance:</span>{" "}
@@ -1676,6 +1744,8 @@ export default function ReportsPage() {
                         </p>
                         <p>
                           <span className="report-label">Reopening Date:</span>
+                          {" "}
+                          {activeReport.reopeningDate || "-"}
                         </p>
                       </div>
                       <p className="mt-3 text-slate-600">{activeReport.summary}</p>
