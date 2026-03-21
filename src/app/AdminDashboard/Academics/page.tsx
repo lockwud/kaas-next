@@ -943,15 +943,18 @@ export default function AcademicsDashboard() {
       if (isBulkMode) {
         // Use bulk endpoint - requires fullName, className, section, classId, admissionNo, rollNumber, and guardianPhone
         const selectedClassData = classDirectory.find((c) => c.id === selectedClassId);
-        const studentsPayload = namesToCreate.map((fullName, index) => ({
-          fullName,
-          className: studentClassAssignmentMode === "now" ? (selectedClassData?.className ?? selectedClass?.className) : undefined,
-          section: studentClassAssignmentMode === "now" ? (selectedClassData?.section ?? selectedClass?.section ?? "") : undefined,
-          classId: studentClassAssignmentMode === "now" ? selectedClassId : undefined,
-          admissionNo: `ADM/${Date.now()}${index}`,
-          rollNumber: `R${Date.now().toString().slice(-4)}${index}`,
-          guardianPhone: "0000000000",
-        }));
+        const studentsPayload = namesToCreate.map((fullName, index) => {
+          const sectionValue = studentClassAssignmentMode === "now" ? (selectedClassData?.section ?? selectedClass?.section) : undefined;
+          return {
+            fullName,
+            className: studentClassAssignmentMode === "now" ? (selectedClassData?.className ?? selectedClass?.className) : undefined,
+            ...(sectionValue ? { section: sectionValue } : {}),
+            classId: studentClassAssignmentMode === "now" ? selectedClassId : undefined,
+            admissionNo: `ADM/${Date.now()}${index}`,
+            rollNumber: `R${Date.now().toString().slice(-4)}${index}`,
+            guardianPhone: "0000000000",
+          };
+        });
 
         const response = await apiRequest<{ success: boolean; created: number; failed: number; errors: Array<{ row: number; error: string }> }>(
           `${API_ENDPOINTS.students}/bulk`,
