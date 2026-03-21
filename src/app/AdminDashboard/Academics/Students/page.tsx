@@ -127,6 +127,7 @@ export default function StudentsDirectoryPage() {
         apiRequest<StudentApi[]>(API_ENDPOINTS.students),
         apiRequest<ClassApi[]>(API_ENDPOINTS.classes),
       ]);
+      // Build lookup maps for efficient matching
       const classLookupById = new Map(
         classesPayload.map((item) => [
           item.id,
@@ -136,47 +137,62 @@ export default function StudentsDirectoryPage() {
           },
         ]),
       );
-      const classLookupByLabel = new Map(
-        classesPayload.map((item) => {
-          const className = item.className ?? item.name ?? "Class";
-          const section = item.section ?? "";
-          const label = `${className} ${section}`.trim();
-          return [normalizeClassLabel(label), { id: item.id, className, section }];
-        }),
-      );
+      // Create a map with key as "className|section" for exact matching
+      const classLookupByClassAndSection = new Map<string, { id: string; className: string; section: string }>();
+      classesPayload.forEach((item) => {
+        const className = (item.className ?? item.name ?? "Class").toLowerCase().trim();
+        const section = (item.section ?? "").toLowerCase().trim();
+        const key = `${className}|${section}`;
+        if (!classLookupByClassAndSection.has(key)) {
+          classLookupByClassAndSection.set(key, {
+            id: item.id,
+            className: item.className ?? item.name ?? "Class",
+            section: item.section ?? "",
+          });
+        }
+      });
       const fixes: Array<{ studentId: string; classId: string; className: string; section: string }> = [];
       const mappedRows = studentsPayload.map((item) => {
         const base = mapStudent(item);
+        let finalClassName = base.className;
+        let finalSection = base.section;
+        let finalClassId = base.classId;
+        // Strategy 1: Match by classId
         if (base.classId && classLookupById.has(base.classId)) {
           const lookup = classLookupById.get(base.classId);
-          return {
-            ...base,
-            className: lookup?.className ?? base.className,
-            section: lookup?.section ?? base.section,
-          };
+          finalClassName = lookup?.className ?? base.className;
+          finalSection = lookup?.section ?? base.section;
         }
-        const rawLabel = `${item.className ?? ""} ${item.section ?? ""}`.trim();
-        const labelKey = normalizeClassLabel(rawLabel || (item.className ?? ""));
-        const lookupByLabel = labelKey ? classLookupByLabel.get(labelKey) : undefined;
-        if (lookupByLabel && !item.classId) {
-          fixes.push({
-            studentId: item.id,
-            classId: lookupByLabel.id,
-            className: lookupByLabel.className,
-            section: lookupByLabel.section,
-          });
-          return {
-            ...base,
-            classId: lookupByLabel.id,
-            className: lookupByLabel.className,
-            section: lookupByLabel.section,
-          };
+        // Strategy 2: Match by className + section (both must be present)
+        else if (base.className && base.section) {
+          const key = `${normalizeClassLabel(base.className)}|${normalizeClassLabel(base.section)}`;
+          const lookup = classLookupByClassAndSection.get(key);
+          if (lookup) {
+            finalClassName = lookup.className;
+            finalSection = lookup.section;
+            finalClassId = lookup.id;
+            // If student didn't have classId but we found a match, fix it
+            if (!item.classId) {
+              fixes.push({
+                studentId: item.id,
+                classId: lookup.id,
+                className: lookup.className,
+                section: lookup.section,
+              });
+            }
+          }
         }
-        return base;
+        return {
+          ...base,
+          className: finalClassName,
+          section: finalSection,
+          classId: finalClassId,
+        };
       });
       setRows(mappedRows);
       setClasses(classesPayload.map(mapClassOption));
       setClassData(classesPayload);
+      // Apply fixes to backend
       if (fixes.length > 0) {
         void Promise.allSettled(
           fixes.map((fix) =>
@@ -233,6 +249,7 @@ export default function StudentsDirectoryPage() {
   // Update rows with section from class lookup
   const rowsWithSection = React.useMemo(() => {
     return rows.map((row) => {
+      // Strategy 1: Match by classId
       if (row.classId && classLookupById.has(row.classId)) {
         const lookup = classLookupById.get(row.classId);
         return {
@@ -241,13 +258,14 @@ export default function StudentsDirectoryPage() {
           section: lookup?.section ?? row.section,
         };
       }
-      const nameKey = normalizeClassLabel(row.className);
-      const lookupByName = classLookupByName.get(nameKey);
-      if (lookupByName && !row.section) {
+      // Strategy 2: Match by full className + section
+      const fullKey = normalizeClassLabel(`${row.className} ${row.section}`.trim());
+      const lookupByFullKey = classLookupByName.get(fullKey);
+      if (lookupByFullKey) {
         return {
           ...row,
-          className: lookupByName.className,
-          section: lookupByName.section,
+          className: lookupByFullKey.className,
+          section: lookupByFullKey.section,
         };
       }
       return row;
@@ -331,7 +349,9 @@ export default function StudentsDirectoryPage() {
           address: newStudent.address,
           guardianName: newStudent.guardianName,
           guardianEmail: newStudent.guardianEmail,
-          guardianPrimaryContact: newStudent.guardianContact,
+          guardianPhone: newStudent.guardianContact,
+          admissionNo: `ADM/${Date.now()}`,
+          rollNumber: `R${Date.now().toString().slice(-4)}`,
           classId: newStudent.classId,
           className: selectedClass?.className ?? newStudent.className,
           section: selectedClass?.section ?? newStudent.section,

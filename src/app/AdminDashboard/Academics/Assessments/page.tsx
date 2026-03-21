@@ -21,6 +21,7 @@ type AssessmentRow = {
   homeworkProject: number;
   exam: number;
   total: number;
+  gender?: string;
 };
 
 type AssessmentRecord = {
@@ -150,11 +151,54 @@ export default function AssessmentsPage() {
         throw assessmentsRes.reason;
       }
 
+      // Build class lookup for section information
+      const classes = classesRes.status === "fulfilled" ? classesRes.value : [];
+      const classLookupById = new Map<string, { className: string; section: string }>();
+      const classLookupByClassAndSection = new Map<string, { id: string; className: string; section: string }>();
+      classes.forEach((cls) => {
+        const className = cls.className ?? cls.name ?? "Class";
+        const section = cls.section ?? "";
+        // Store by id
+        classLookupById.set(cls.id, { className, section });
+        // Store by className|section
+        const key = `${className.toLowerCase().trim()}|${section.toLowerCase().trim()}`;
+        if (!classLookupByClassAndSection.has(key)) {
+          classLookupByClassAndSection.set(key, { id: cls.id, className, section });
+        }
+      });
+
       console.log("Assessments loaded:", assessmentsRes.value);
-      const normalized = assessmentsRes.value.map(normalizeRecord);
+      
+      // Normalize assessments and try to get section from classes
+      const normalized = assessmentsRes.value.map((record) => {
+        let finalClassName = record.className ?? "Class";
+        let finalSection = record.section ?? "";
+        
+        // Try to get section from classId
+        if (record.classId && classLookupById.has(record.classId)) {
+          const lookup = classLookupById.get(record.classId);
+          finalClassName = lookup?.className ?? finalClassName;
+          finalSection = lookup?.section ?? finalSection;
+        }
+        // Try to get section from className + section lookup
+        else if (record.className && record.section) {
+          const key = `${record.className.toLowerCase().trim()}|${record.section.toLowerCase().trim()}`;
+          const lookup = classLookupByClassAndSection.get(key);
+          if (lookup) {
+            finalClassName = lookup.className;
+            finalSection = lookup.section;
+          }
+        }
+        
+        return normalizeRecord({
+          ...record,
+          className: finalClassName,
+          section: finalSection,
+        });
+      });
       console.log("Normalized assessments:", normalized);
       setRecords(normalized);
-      setClasses(classesRes.status === "fulfilled" ? classesRes.value : []);
+      setClasses(classes);
       setSubjects(subjectsRes.status === "fulfilled" ? subjectsRes.value : []);
       if (academicMetaRes.status === "fulfilled") {
         setAcademicSessions(academicMetaRes.value.sessions ?? []);
@@ -344,7 +388,7 @@ export default function AssessmentsPage() {
   // Filter by gender if gender info exists
   const filteredRows = React.useMemo(() => {
     if (genderFilter === 'all') return activeRows;
-    return activeRows.filter((row: any) => {
+    return activeRows.filter((row) => {
       // Assume row.gender exists, fallback to all if not
       if (!row.gender) return true;
       return row.gender.toLowerCase() === genderFilter;

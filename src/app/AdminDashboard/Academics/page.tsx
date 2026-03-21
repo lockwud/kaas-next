@@ -508,6 +508,17 @@ export default function AcademicsDashboard() {
             return [normalize(label), { className, section }];
           }),
         );
+        // Create a lookup by className only for fallback when section is empty
+        const classLookupByNameOnly = new Map<string, { className: string; section: string }>();
+        (classes ?? []).forEach((item) => {
+          const className = (item.className ?? item.name ?? "").toLowerCase().trim();
+          if (className && !classLookupByNameOnly.has(className)) {
+            classLookupByNameOnly.set(className, {
+              className: item.className ?? item.name ?? "",
+              section: item.section ?? "",
+            });
+          }
+        });
         setManagedStudents(
           studentsPayload.map((student) => {
             const fallbackName = student.className ?? "";
@@ -530,6 +541,18 @@ export default function AcademicsDashboard() {
                 fullName: student.fullName ?? student.name ?? "Unnamed Student",
                 className: lookupByLabel.className || fallbackName,
                 section: lookupByLabel.section || fallbackSection,
+                classId: student.classId,
+              };
+            }
+            // Fallback: try to find section from any class with the same className
+            const normalizedClassName = fallbackName.toLowerCase().trim();
+            const lookupByName = classLookupByNameOnly.get(normalizedClassName);
+            if (lookupByName) {
+              return {
+                id: student.id,
+                fullName: student.fullName ?? student.name ?? "Unnamed Student",
+                className: lookupByName.className || fallbackName,
+                section: lookupByName.section || fallbackSection,
                 classId: student.classId,
               };
             }
@@ -918,10 +941,16 @@ export default function AcademicsDashboard() {
     const namesToCreate = isBulkMode ? parsedBulkNames : [trimmedName];
     try {
       if (isBulkMode) {
-        // Use bulk endpoint - only requires fullName and className
-        const studentsPayload = namesToCreate.map((fullName) => ({
+        // Use bulk endpoint - requires fullName, className, section, classId, admissionNo, rollNumber, and guardianPhone
+        const selectedClassData = classDirectory.find((c) => c.id === selectedClassId);
+        const studentsPayload = namesToCreate.map((fullName, index) => ({
           fullName,
-          className: studentClassAssignmentMode === "now" ? selectedClass?.className : undefined,
+          className: studentClassAssignmentMode === "now" ? (selectedClassData?.className ?? selectedClass?.className) : undefined,
+          section: studentClassAssignmentMode === "now" ? (selectedClassData?.section ?? selectedClass?.section ?? "") : undefined,
+          classId: studentClassAssignmentMode === "now" ? selectedClassId : undefined,
+          admissionNo: `ADM/${Date.now()}${index}`,
+          rollNumber: `R${Date.now().toString().slice(-4)}${index}`,
+          guardianPhone: "0000000000",
         }));
 
         const response = await apiRequest<{ success: boolean; created: number; failed: number; errors: Array<{ row: number; error: string }> }>(
@@ -942,18 +971,21 @@ export default function AcademicsDashboard() {
         success(`${response.created} students have been registered successfully.`);
       } else {
         // Single student creation - uses original endpoint with full details
+        const selectedClassData = classDirectory.find((c) => c.id === selectedClassId);
         await apiRequest<StudentApi>(API_ENDPOINTS.students, {
           method: "POST",
           body: JSON.stringify({
             fullName: trimmedName,
-            className: studentClassAssignmentMode === "now" ? selectedClass?.className : undefined,
-            section: studentClassAssignmentMode === "now" ? selectedClass?.section : undefined,
+            className: studentClassAssignmentMode === "now" ? (selectedClassData?.className ?? selectedClass?.className) : undefined,
+            section: studentClassAssignmentMode === "now" ? (selectedClassData?.section ?? selectedClass?.section ?? "") : undefined,
             classId: studentClassAssignmentMode === "now" ? selectedClassId : undefined,
+            admissionNo: `ADM/${Date.now()}`,
+            rollNumber: `R${Date.now().toString().slice(-4)}`,
             admissionDate,
             academicYear: selectedAcademicYear,
             guardianName: guardianName.trim() || "Not Provided",
             guardianRelationship: guardianRelationship.trim() || "Guardian",
-            guardianPrimaryContact: guardianContact.trim() || "Not Provided",
+            guardianPhone: guardianContact.trim() || "Not Provided",
             guardianSecondaryContact: guardianOptionalContact,
             houseAddress: houseAddress.trim() || "Not Provided",
             emergencyContactName: emergencyContactName.trim() || "Not Provided",
@@ -1294,7 +1326,7 @@ export default function AcademicsDashboard() {
           const studentClassName = normalize(student.className);
           const studentSection = student.section ? normalize(student.section) : "";
           
-          // Match class name
+          // Match class name first
           if (studentClassName !== targetClassName) return false;
           
           // If target has no section, match students with no/empty section
@@ -1302,8 +1334,8 @@ export default function AcademicsDashboard() {
             return !studentSection;
           }
           
-          // If target has section, match students with that section OR no section
-          return !studentSection || studentSection === targetSection;
+          // If target has section, only match students with exact same section
+          return studentSection === targetSection;
         },
       )
       .sort((a, b) => a.fullName.localeCompare(b.fullName));
