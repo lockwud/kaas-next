@@ -944,12 +944,13 @@ export default function AcademicsDashboard() {
         // Use bulk endpoint - requires fullName, className, section, classId, admissionNo, rollNumber, and guardianPhone
         const selectedClassData = classDirectory.find((c) => c.id === selectedClassId);
         const studentsPayload = namesToCreate.map((fullName, index) => {
-          const classData = selectedClassData || selectedClass;
-          const classIdValue = selectedClassId || (classData ? classData.id : undefined);
+          // Always use the currently selected class for all students in this bulk upload
+          const classData = classDirectory.find((c) => c.id === selectedClassId);
+          const classIdValue = classData ? classData.id : undefined;
           const classNameValue = classData ? classData.className : undefined;
           const sectionValue = classData ? classData.section : undefined;
 
-          if (studentClassAssignmentMode === "now") {
+          if (studentClassAssignmentMode === "now" && classIdValue && classNameValue && sectionValue) {
             return {
               fullName,
               className: classNameValue,
