@@ -943,13 +943,13 @@ export default function AcademicsDashboard() {
       if (isBulkMode) {
         // Use bulk endpoint - requires fullName, className, section, classId, admissionNo, rollNumber, and guardianPhone
         const selectedClassData = classDirectory.find((c) => c.id === selectedClassId);
-        const studentsPayload = namesToCreate.map((fullName, index) => {
-          // Always use the currently selected class for all students in this bulk upload
-          const classData = classDirectory.find((c) => c.id === selectedClassId);
-          const classIdValue = classData ? classData.id : undefined;
-          const classNameValue = classData ? classData.className : undefined;
-          const sectionValue = classData ? classData.section : undefined;
+        // Always use the selected class's info for every student in this bulk upload
+        const classData = classDirectory.find((c) => c.id === selectedClassId);
+        const classIdValue = classData ? classData.id : undefined;
+        const classNameValue = classData ? classData.className : undefined;
+        const sectionValue = classData ? classData.section : undefined;
 
+        const studentsPayload = namesToCreate.map((fullName, index) => {
           if (studentClassAssignmentMode === "now" && classIdValue && classNameValue && sectionValue) {
             return {
               fullName,
@@ -969,6 +969,13 @@ export default function AcademicsDashboard() {
           };
         });
 
+        // Debug: show payload and selected class in alert and log
+        alert("Selected class: " + JSON.stringify(classData) + "\n\nPayload: " + JSON.stringify(studentsPayload, null, 2));
+        console.log("[BulkUpload] selectedClass:", classData);
+        console.log("[BulkUpload] studentsPayload:", studentsPayload);
+
+        // Debug: log the payload being sent
+        console.log("[BulkUpload] studentsPayload:", studentsPayload);
         const response = await apiRequest<{ success: boolean; created: number; failed: number; errors: Array<{ row: number; error: string }> }>(
           `${API_ENDPOINTS.students}/bulk`,
           {
