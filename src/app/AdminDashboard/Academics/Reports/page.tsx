@@ -95,57 +95,83 @@ const normalizeTermKey = (term?: string) =>
   term ? term.trim().toLowerCase().replace(/\s+/g, "_") : "";
 
 const scoreToGrade = (score: number) => {
-  if (score >= 85) return "A";
-  if (score >= 75) return "B";
-  if (score >= 65) return "C";
+  if (score >= 80) return "A";
+  if (score >= 70) return "B";
+  if (score >= 60) return "C";
   if (score >= 50) return "D";
   if (score >= 40) return "E";
   return "F";
 };
 
 const scoreToRemark = (score: number) => {
-  if (score >= 85) return "Excellent";
-  if (score >= 75) return "Very Good";
-  if (score >= 65) return "Good";
-  if (score >= 50) return "Fair";
-  if (score >= 40) return "Needs Improvement";
-  return "Poor";
+  if (score >= 80) return "Excellent";
+  if (score >= 70) return "Very Good";
+  if (score >= 60) return "Good";
+  if (score >= 50) return "Satisfactory";
+  if (score >= 40) return "Poor";
+  return "Below Average";
 };
 
 const scoreToSummary = (score: number) => {
-  if (score >= 85) return "Outstanding performance across all subjects.";
-  if (score >= 75) return "Very strong performance with consistent results.";
-  if (score >= 65) return "Good performance with room for improvement.";
-  if (score >= 50) return "Fair performance; improvement is required.";
+  if (score >= 80) return "Outstanding performance across all subjects.";
+  if (score >= 70) return "Very strong performance with consistent results.";
+  if (score >= 60) return "Good performance with room for improvement.";
+  if (score >= 50) return "Satisfactory performance; improvement needed.";
   if (score >= 40) return "Below average performance; needs support.";
-  return "Poor performance; urgent support required.";
+  return "Very poor performance; urgent intervention required.";
 };
 
-const scoreToBehavior = (score: number) => {
-  if (score >= 85) return "Outstanding";
-  if (score >= 75) return "Very Good";
-  if (score >= 65) return "Good";
-  if (score >= 50) return "Fair";
-  if (score >= 40) return "Needs Improvement";
-  return "Poor";
+// Behavior rating based on conduct and social interaction (independent from academic score)
+const scoreToBehavior = (rating: number) => {
+  if (rating >= 90) return "Exemplary";
+  if (rating >= 80) return "Outstanding";
+  if (rating >= 70) return "Very Good";
+  if (rating >= 60) return "Good";
+  if (rating >= 50) return "Satisfactory";
+  if (rating >= 40) return "Needs Improvement";
+  return "Unsatisfactory";
 };
 
-const scoreToDiscipline = (score: number) => {
-  if (score >= 85) return "Exemplary";
-  if (score >= 75) return "Very Good";
-  if (score >= 65) return "Good";
-  if (score >= 50) return "Satisfactory";
-  if (score >= 40) return "Needs Improvement";
-  return "Poor";
+// Discipline rating based on compliance with school rules (independent from academic score)
+const scoreToDiscipline = (rating: number) => {
+  if (rating >= 90) return "Impeccable";
+  if (rating >= 80) return "Excellent";
+  if (rating >= 70) return "Very Commendable";
+  if (rating >= 60) return "Commendable";
+  if (rating >= 50) return "Acceptable";
+  if (rating >= 40) return "Concerning";
+  return "Critical";
 };
 
 const gradeInterpretation = [
-  { range: "85 - 100", grade: "A", remark: "Excellent" },
-  { range: "75 - 84", grade: "B", remark: "Very Good" },
-  { range: "65 - 74", grade: "C", remark: "Good" },
-  { range: "50 - 64", grade: "D", remark: "Fair" },
-  { range: "40 - 49", grade: "E", remark: "Needs Improvement" },
-  { range: "0 - 39", grade: "F", remark: "Poor" },
+  { range: "80 - 100", grade: "A", remark: "Excellent" },
+  { range: "70 - 79", grade: "B", remark: "Very Good" },
+  { range: "60 - 69", grade: "C", remark: "Good" },
+  { range: "50 - 59", grade: "D", remark: "Satisfactory" },
+  { range: "40 - 49", grade: "E", remark: "Poor" },
+  { range: "0 - 39", grade: "F", remark: "Below Average" },
+];
+
+// Behavior rating scale for teachers to assess
+const behaviorRatingScale = [
+  { range: "90 - 100", rating: "Exemplary", description: "Always demonstrates outstanding conduct and positive social interactions" },
+  { range: "80 - 89", rating: "Outstanding", description: "Consistently shows excellent behavior and character" },
+  { range: "70 - 79", rating: "Very Good", description: "Usually behaves well with minor occasional issues" },
+  { range: "60 - 69", rating: "Good", description: "Generally demonstrates good conduct" },
+  { range: "50 - 59", rating: "Satisfactory", description: "Behavior meets basic expectations" },
+  { range: "40 - 49", rating: "Needs Improvement", description: "Behavior requires monitoring and improvement" },
+  { range: "0 - 39", rating: "Unsatisfactory", description: "Significant behavioral issues observed" },
+];
+
+// Discipline rating scale for teachers to assess
+const disciplineRatingScale = [
+  { range: "90 - 100", rating: "Impeccable", description: "Always complies with all school rules and regulations" },
+  { range: "80 - 89", rating: "Excellent", description: "Consistently follows school policies without issues" },
+  { range: "70 - 79", rating: "Very Commendable", description: "Usually observes rules with rare minor violations" },
+  { range: "60 - 69", rating: "Commendable", description: "Generally follows rules and regulations" },
+  { range: "50 - 59", rating: "Acceptable", description: "Basic compliance with school rules" },
+  { range: "40 - 49", rating: "Concerning", description: "Multiple rule violations require attention" },
+  { range: "0 - 39", rating: "Critical", description: "Serious disciplinary issues require immediate intervention" },
 ];
 
 const formatExamWeight = (exam?: number) => {
@@ -639,6 +665,11 @@ export default function ReportsPage() {
       );
       const status = reportStatus[reportKey];
 
+      // Behavior and discipline are independent from academic scores
+      // They will be set by teachers separately (defaulting to "Very Good" / "Excellent")
+      const behaviorRating = 85; // Default - should be set by teacher in separate UI
+      const disciplineRating = 88; // Default - should be set by teacher in separate UI
+      
       return {
         id: reportKey,
         studentId: data.studentId,
@@ -654,8 +685,8 @@ export default function ReportsPage() {
         overallGrade,
         attendance,
         summary: scoreToSummary(overallScore),
-        behavior: scoreToBehavior(overallScore),
-        discipline: scoreToDiscipline(overallScore),
+        behavior: scoreToBehavior(behaviorRating),
+        discipline: scoreToDiscipline(disciplineRating),
         ready,
         printedAt: status?.printedAt,
       };
