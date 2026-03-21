@@ -17,7 +17,18 @@ import {
 } from "lucide-react";
 import { Button } from "../../../../components/ui/Button";
 import Link from "next/link";
-import { students, users } from "../../../../lib/school-data";
+import { apiRequest } from "../../../../lib/api-client";
+import { API_ENDPOINTS } from "../../../../lib/api-endpoints";
+
+interface Student {
+  id: string;
+  role?: string;
+}
+
+interface User {
+  id: string;
+  role: string;
+}
 
 type SetupModule = {
   title: string;
@@ -42,6 +53,24 @@ type CheckCircleProps = {
 };
 
 export default function MySchoolDashboard() {
+  const [students, setStudents] = React.useState<Student[]>([]);
+  const [users, setUsers] = React.useState<User[]>([]);
+
+  React.useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [studentsData, usersData] = await Promise.all([
+          apiRequest<Student[]>(API_ENDPOINTS.students).catch(() => []),
+          apiRequest<User[]>(API_ENDPOINTS.usersManagement).catch(() => []),
+        ]);
+        setStudents(studentsData);
+        setUsers(usersData);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
+    };
+    fetchData();
+  }, []);
   const setupModules: SetupModule[] = [
     {
       title: "Classes",

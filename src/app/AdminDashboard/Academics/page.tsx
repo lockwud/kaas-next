@@ -950,11 +950,12 @@ export default function AcademicsDashboard() {
         const sectionValue = classData ? classData.section : undefined;
 
         const studentsPayload = namesToCreate.map((fullName, index) => {
-          if (studentClassAssignmentMode === "now" && classIdValue && classNameValue && sectionValue) {
+          // Always include className+section when "assign now" is selected and a class is chosen
+          if (studentClassAssignmentMode === "now" && selectedClassId) {
             return {
               fullName,
               className: classNameValue,
-              section: sectionValue,
+              section: sectionValue || "",
               classId: classIdValue,
               admissionNo: `ADM/${Date.now()}${index}`,
               rollNumber: `R${Date.now().toString().slice(-4)}${index}`,

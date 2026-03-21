@@ -6,8 +6,31 @@ import { Button } from "../../../components/ui/Button";
 import { Select } from "../../../components/ui/Select";
 import { Table } from "../../../components/ui/Table";
 import { motion } from "framer-motion";
-import { uploadJobs, uploadTemplates, users } from "../../../lib/school-data";
 import { Download, Upload } from "lucide-react";
+import { apiRequest } from "../../../lib/api-client";
+import { API_ENDPOINTS } from "../../../lib/api-endpoints";
+
+// Types for data (currently no API endpoints for upload jobs/templates, using empty arrays)
+interface UploadJob {
+  id: string;
+  templateId: string;
+  fileName: string;
+  status: string;
+  uploadedBy: string;
+  totalRows: number;
+  successfulRows: number;
+}
+
+interface UploadTemplate {
+  id: string;
+  name: string;
+  requiredColumns?: string[];
+}
+
+interface User {
+  id: string;
+  fullName: string;
+}
 
 interface UploadRow {
   id: string;
@@ -19,6 +42,11 @@ interface UploadRow {
 }
 
 export default function DataCenterPage() {
+  // Empty arrays since upload jobs/templates API endpoints are not available yet
+  const uploadJobs: UploadJob[] = [];
+  const uploadTemplates: UploadTemplate[] = [];
+  const users: User[] = [];
+
   const rows: UploadRow[] = uploadJobs
     .map((job) => ({
       id: job.id,
@@ -62,7 +90,7 @@ export default function DataCenterPage() {
             {uploadTemplates.map((template) => (
               <div key={template.id} className="p-3 rounded-lg border border-gray-100 bg-gray-50">
                 <p className="font-semibold text-gray-800">{template.name}</p>
-                <p className="text-gray-500 mt-1">Columns: {template.requiredColumns.join(", ")}</p>
+                <p className="text-gray-500 mt-1">Columns: {template.requiredColumns?.join(", ") ?? "N/A"}</p>
               </div>
             ))}
           </div>

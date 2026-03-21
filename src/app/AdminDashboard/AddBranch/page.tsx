@@ -6,9 +6,10 @@ import { Input } from "../../../components/ui/Input";
 import { Button } from "../../../components/ui/Button";
 import { Select } from "../../../components/ui/Select";
 import { motion, Variants } from "framer-motion";
-import { branches as initialBranches } from "../../../lib/school-data";
 import { Branch } from "../../../types/school";
 import { Download, Upload } from "lucide-react";
+import { apiRequest } from "../../../lib/api-client";
+import { API_ENDPOINTS } from "../../../lib/api-endpoints";
 
 interface BranchFormState {
   billingName: string;
@@ -46,7 +47,19 @@ const defaultForm: BranchFormState = {
 
 export default function AddBranch() {
   const [form, setForm] = React.useState<BranchFormState>(defaultForm);
-  const [branchList, setBranchList] = React.useState<Branch[]>(initialBranches);
+  const [branchList, setBranchList] = React.useState<Branch[]>([]);
+
+  React.useEffect(() => {
+    const fetchBranches = async () => {
+      try {
+        const data = await apiRequest<Branch[]>(API_ENDPOINTS.classes).catch(() => []);
+        setBranchList(data);
+      } catch (error) {
+        console.error("Error fetching branches:", error);
+      }
+    };
+    fetchBranches();
+  }, []);
 
   const containerVariants: Variants = {
     hidden: { opacity: 0, y: 10 },

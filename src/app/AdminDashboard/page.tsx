@@ -16,33 +16,95 @@ import {
   YAxis,
 } from "recharts";
 import { motion, Variants } from "framer-motion";
-import { assessments, getStudentName, reports, students, uploadJobs, users } from "../../lib/school-data";
+import { apiRequest } from "../../lib/api-client";
+import { API_ENDPOINTS } from "../../lib/api-endpoints";
+
+// Types for API responses
+interface Student {
+  id: string;
+  fullName: string;
+  className?: string;
+  section?: string;
+  admissionNo?: string;
+}
+
+interface Assessment {
+  id: string;
+}
+
+interface Report {
+  id: string;
+  studentId: string;
+  grade: string;
+  scorePercent: number;
+  generatedAt: string;
+  deliveryChannels: string[];
+}
+
+interface User {
+  id: string;
+}
 
 export default function Guardian() {
+  const [students, setStudents] = React.useState<Student[]>([]);
+  const [assessments, setAssessments] = React.useState<Assessment[]>([]);
+  const [reports, setReports] = React.useState<Report[]>([]);
+  const [users, setUsers] = React.useState<User[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [studentsData, assessmentsData, reportsData, usersData] = await Promise.all([
+          apiRequest<Student[]>(API_ENDPOINTS.students).catch(() => []),
+          apiRequest<Assessment[]>(API_ENDPOINTS.assessments).catch(() => []),
+          apiRequest<Report[]>(API_ENDPOINTS.reports).catch(() => []),
+          apiRequest<User[]>(API_ENDPOINTS.usersManagement).catch(() => []),
+        ]);
+        setStudents(studentsData);
+        setAssessments(assessmentsData);
+        setReports(reportsData);
+        setUsers(usersData);
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
   const enrollmentByClass = Object.entries(
     students.reduce<Record<string, number>>((acc, student) => {
-      acc[student.className] = (acc[student.className] ?? 0) + 1;
+      if (student.className) {
+        acc[student.className] = (acc[student.className] ?? 0) + 1;
+      }
       return acc;
     }, {})
   ).map(([className, count]) => ({ className, count }));
 
   const reportChannelData = [
-    { name: "WhatsApp", count: reports.filter((report) => report.deliveryChannels.includes("whatsapp")).length },
-    { name: "Email", count: reports.filter((report) => report.deliveryChannels.includes("email")).length },
-    { name: "PDF", count: reports.filter((report) => report.deliveryChannels.includes("pdf_download")).length },
+    { name: "WhatsApp", count: reports.filter((report) => report.deliveryChannels?.includes("whatsapp")).length },
+    { name: "Email", count: reports.filter((report) => report.deliveryChannels?.includes("email")).length },
+    { name: "PDF", count: reports.filter((report) => report.deliveryChannels?.includes("pdf_download")).length },
   ];
 
   const recentlyAdmittedStudents = [...students].slice(-3).reverse();
 
-  const latestReports = [...reports].sort((a, b) => b.generatedAt.localeCompare(a.generatedAt)).slice(0, 3);
+  const latestReports = [...reports].sort((a, b) => new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime()).slice(0, 3);
 
-  const processingUploads = uploadJobs.filter((job) => job.status === "processing").length;
-  const failedUploads = uploadJobs.filter((job) => job.status === "failed").length;
+  const processingUploads = 0; // TODO: Fetch from API when upload jobs endpoint is available
+  const failedUploads = 0; // TODO: Fetch from API when upload jobs endpoint is available
   const admittedApprovals = students.length;
 
   const avgScore = reports.length
-    ? Math.round(reports.reduce((sum, report) => sum + report.scorePercent, 0) / reports.length)
+    ? Math.round(reports.reduce((sum, report) => sum + (report.scorePercent || 0), 0) / reports.length)
     : 0;
+
+  const getStudentName = (studentId: string): string => {
+    const student = students.find(s => s.id === studentId);
+    return student?.fullName ?? "Unknown Student";
+  };
 
   const cards = [
     { title: "Students", value: students.length, icon: <Users size={16} className="text-emerald-600" /> },
@@ -153,7 +215,7 @@ export default function Guardian() {
             </div>
 
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
-              <MiniMetric label="Admissions Queue" value={uploadJobs.length} tone="emerald" />
+              <MiniMetric label="Admissions Queue" value={0} tone="emerald" />
               <MiniMetric label="Assessments Planned" value={assessments.length} tone="sky" />
               <MiniMetric label="Reports Processing" value={processingUploads} tone="amber" />
               <MiniMetric label="Approvals" value={admittedApprovals} tone="indigo" />

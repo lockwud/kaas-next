@@ -9,7 +9,6 @@ import { Pagination } from "../../../../components/ui/Pagination";
 import { useToast } from "@/hooks/useToast";
 import { apiRequest } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/lib/api-endpoints";
-import { loadClasses, saveClasses, CLASSES_STORAGE_KEY } from "@/lib/classes-storage";
 
 type ClassRow = {
   id: string;
@@ -46,36 +45,8 @@ export default function ClassesPage() {
   const load = async () => {
     setIsLoading(true);
     try {
-      let classesPayload: ClassApi[] = [];
-      
-      // Try to fetch from API first
-      try {
-        classesPayload = await apiRequest<ClassApi[]>(API_ENDPOINTS.classes);
-      } catch {
-        // If API fails, try to get from local storage
-        const localClasses = loadClasses();
-        if (localClasses.length > 0) {
-          classesPayload = localClasses.map((cls) => ({
-            id: cls.id,
-            className: cls.className,
-            section: cls.section,
-            classTeacher: cls.classTeacherName ? { fullName: cls.classTeacherName } : undefined,
-          }));
-        }
-      }
-
-      // If still no classes from API, try local storage as final fallback
-      if (classesPayload.length === 0) {
-        const localClasses = loadClasses();
-        if (localClasses.length > 0) {
-          classesPayload = localClasses.map((cls) => ({
-            id: cls.id,
-            className: cls.className,
-            section: cls.section,
-            classTeacher: cls.classTeacherName ? { fullName: cls.classTeacherName } : undefined,
-          }));
-        }
-      }
+      // Fetch from API only
+      const classesPayload = await apiRequest<ClassApi[]>(API_ENDPOINTS.classes);
 
       const studentsPayload = await apiRequest<StudentApi[]>(API_ENDPOINTS.students).catch(() => []);
 
@@ -103,24 +74,6 @@ export default function ClassesPage() {
       });
 
       setRows(mappedClasses);
-      
-      // Sync to local storage if we got data from API
-      if (mappedClasses.length > 0) {
-        try {
-          const localClasses = loadClasses();
-          if (localClasses.length === 0) {
-            saveClasses(mappedClasses.map(c => ({
-              id: c.id,
-              schoolId: "school_001",
-              className: c.className,
-              section: c.section === "-" ? "" : c.section,
-              classTeacherName: c.classTeacher === "Unassigned" ? undefined : c.classTeacher,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            })));
-          }
-        } catch {}
-      }
     } catch (err) {
       error(err instanceof Error ? err.message : "Unable to load classes.");
     } finally {
