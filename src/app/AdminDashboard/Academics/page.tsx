@@ -944,12 +944,12 @@ export default function AcademicsDashboard() {
         // Use bulk endpoint - requires fullName, className, section, classId, admissionNo, rollNumber, and guardianPhone
         const selectedClassData = classDirectory.find((c) => c.id === selectedClassId);
         const studentsPayload = namesToCreate.map((fullName, index) => {
-          const sectionValue = studentClassAssignmentMode === "now" ? (selectedClassData?.section ?? selectedClass?.section) : undefined;
+          const classData = selectedClassData || selectedClass;
           return {
             fullName,
-            className: studentClassAssignmentMode === "now" ? (selectedClassData?.className ?? selectedClass?.className) : undefined,
-            ...(sectionValue ? { section: sectionValue } : {}),
-            classId: studentClassAssignmentMode === "now" ? selectedClassId : undefined,
+            className: studentClassAssignmentMode === "now" ? (classData?.className ?? "") : undefined,
+            section: studentClassAssignmentMode === "now" ? (classData?.section ?? "") : undefined,
+            classId: studentClassAssignmentMode === "now" ? (selectedClassId || classData?.id) : undefined,
             admissionNo: `ADM/${Date.now()}${index}`,
             rollNumber: `R${Date.now().toString().slice(-4)}${index}`,
             guardianPhone: "0000000000",
