@@ -945,11 +945,23 @@ export default function AcademicsDashboard() {
         const selectedClassData = classDirectory.find((c) => c.id === selectedClassId);
         const studentsPayload = namesToCreate.map((fullName, index) => {
           const classData = selectedClassData || selectedClass;
+          const classIdValue = selectedClassId || (classData ? classData.id : undefined);
+          const classNameValue = classData ? classData.className : undefined;
+          const sectionValue = classData ? classData.section : undefined;
+
+          if (studentClassAssignmentMode === "now") {
+            return {
+              fullName,
+              className: classNameValue,
+              section: sectionValue,
+              classId: classIdValue,
+              admissionNo: `ADM/${Date.now()}${index}`,
+              rollNumber: `R${Date.now().toString().slice(-4)}${index}`,
+              guardianPhone: "0000000000",
+            };
+          }
           return {
             fullName,
-            className: studentClassAssignmentMode === "now" ? (classData?.className ?? "") : undefined,
-            section: studentClassAssignmentMode === "now" ? (classData?.section ?? "") : undefined,
-            classId: studentClassAssignmentMode === "now" ? (selectedClassId || classData?.id) : undefined,
             admissionNo: `ADM/${Date.now()}${index}`,
             rollNumber: `R${Date.now().toString().slice(-4)}${index}`,
             guardianPhone: "0000000000",
