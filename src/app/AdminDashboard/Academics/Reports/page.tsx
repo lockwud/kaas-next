@@ -108,7 +108,7 @@ const scoreToRemark = (score: number) => {
   if (score >= 70) return "Very Good";
   if (score >= 60) return "Good";
   if (score >= 50) return "Satisfactory";
-  if (score >= 40) return "Poor";
+  if (score >= 40) return "Pass";
   return "Below Average";
 };
 
@@ -148,7 +148,7 @@ const gradeInterpretation = [
   { range: "70 - 79", grade: "B", remark: "Very Good" },
   { range: "60 - 69", grade: "C", remark: "Good" },
   { range: "50 - 59", grade: "D", remark: "Satisfactory" },
-  { range: "40 - 49", grade: "E", remark: "Poor" },
+  { range: "40 - 49", grade: "E", remark: "Pass" },
   { range: "0 - 39", grade: "F", remark: "Below Average" },
 ];
 
