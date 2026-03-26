@@ -71,8 +71,7 @@ type ReportCard = {
   overallGrade: string;
   attendance: { present: number; total: number; percent: number };
   summary: string;
-  behavior: string;
-  discipline: string;
+  conductAttitude: string;
   ready: boolean;
   printedAt?: string;
 };
@@ -104,44 +103,48 @@ const scoreToGrade = (score: number) => {
 };
 
 const scoreToRemark = (score: number) => {
-  if (score >= 80) return "Excellent";
-  if (score >= 70) return "Very Good";
-  if (score >= 60) return "Good";
-  if (score >= 50) return "Satisfactory";
-  if (score >= 40) return "Pass";
-  return "Below Average";
+  if (score >= 90) return "Excellent performance";
+  if (score >= 85) return "Very brilliant";
+  if (score >= 80) return "Excellent work";
+  if (score >= 75) return "A very good performance";
+  if (score >= 70) return "Very broad minded";
+  if (score >= 65) return "Performing well in all areas";
+  if (score >= 60) return "Good job";
+  if (score >= 55) return "Well done";
+  if (score >= 50) return "Keep it up";
+  if (score >= 45) return "Very clever";
+  if (score >= 40) return "Can do better";
+  if (score >= 35) return "Needs little guidance";
+  if (score >= 20) return "More room for improvement";
+  return "Needs intensive studies";
 };
 
 const scoreToSummary = (score: number) => {
-  if (score >= 80) return "Outstanding performance across all subjects.";
-  if (score >= 70) return "Very strong performance with consistent results.";
-  if (score >= 60) return "Good performance with room for improvement.";
-  if (score >= 50) return "Satisfactory performance; improvement needed.";
-  if (score >= 40) return "Below average performance; needs support.";
-  return "Very poor performance; urgent intervention required.";
+  if (score >= 90) return "Outstanding academic performance with exceptional understanding across all subjects.";
+  if (score >= 80) return "Excellent performance demonstrating strong grasp of subject matter.";
+  if (score >= 70) return "Very good performance with solid understanding and consistent effort.";
+  if (score >= 60) return "Good performance showing satisfactory understanding of key concepts.";
+  if (score >= 50) return "Satisfactory performance with room for improvement in some areas.";
+  if (score >= 40) return "Below average performance; requires additional support and practice.";
+  if (score >= 30) return "Poor performance; needs significant improvement and intervention.";
+  return "Very poor performance; urgent academic intervention required.";
 };
 
-// Behavior rating based on conduct and social interaction (independent from academic score)
-const scoreToBehavior = (rating: number) => {
-  if (rating >= 90) return "Exemplary";
-  if (rating >= 80) return "Outstanding";
-  if (rating >= 70) return "Very Good";
-  if (rating >= 60) return "Good";
-  if (rating >= 50) return "Satisfactory";
-  if (rating >= 40) return "Needs Improvement";
-  return "Unsatisfactory";
-};
-
-// Discipline rating based on compliance with school rules (independent from academic score)
-const scoreToDiscipline = (rating: number) => {
-  if (rating >= 90) return "Impeccable";
-  if (rating >= 80) return "Excellent";
-  if (rating >= 70) return "Very Commendable";
-  if (rating >= 60) return "Commendable";
-  if (rating >= 50) return "Acceptable";
-  if (rating >= 40) return "Concerning";
-  return "Critical";
-};
+const conductAttitudeOptions = [
+  "Respectful behaviour",
+  "Active participation",
+  "Honest and trustworthy",
+  "Self-disciplined and focused",
+  "Cooperative and team oriented",
+  "Patient and persistent",
+  "Grateful and appreciative",
+  "Focused and engaged",
+  "Respectful and kind",
+  "Enthusiastic learner",
+  "Confident and motivated",
+  "Responsible and reliable",
+  "Humble and willing to learn"
+];
 
 const gradeInterpretation = [
   { range: "80 - 100", grade: "A", remark: "Excellent" },
@@ -150,28 +153,6 @@ const gradeInterpretation = [
   { range: "50 - 59", grade: "D", remark: "Satisfactory" },
   { range: "40 - 49", grade: "E", remark: "Pass" },
   { range: "0 - 39", grade: "F", remark: "Below Average" },
-];
-
-// Behavior rating scale for teachers to assess
-const behaviorRatingScale = [
-  { range: "90 - 100", rating: "Exemplary", description: "Always demonstrates outstanding conduct and positive social interactions" },
-  { range: "80 - 89", rating: "Outstanding", description: "Consistently shows excellent behavior and character" },
-  { range: "70 - 79", rating: "Very Good", description: "Usually behaves well with minor occasional issues" },
-  { range: "60 - 69", rating: "Good", description: "Generally demonstrates good conduct" },
-  { range: "50 - 59", rating: "Satisfactory", description: "Behavior meets basic expectations" },
-  { range: "40 - 49", rating: "Needs Improvement", description: "Behavior requires monitoring and improvement" },
-  { range: "0 - 39", rating: "Unsatisfactory", description: "Significant behavioral issues observed" },
-];
-
-// Discipline rating scale for teachers to assess
-const disciplineRatingScale = [
-  { range: "90 - 100", rating: "Impeccable", description: "Always complies with all school rules and regulations" },
-  { range: "80 - 89", rating: "Excellent", description: "Consistently follows school policies without issues" },
-  { range: "70 - 79", rating: "Very Commendable", description: "Usually observes rules with rare minor violations" },
-  { range: "60 - 69", rating: "Commendable", description: "Generally follows rules and regulations" },
-  { range: "50 - 59", rating: "Acceptable", description: "Basic compliance with school rules" },
-  { range: "40 - 49", rating: "Concerning", description: "Multiple rule violations require attention" },
-  { range: "0 - 39", rating: "Critical", description: "Serious disciplinary issues require immediate intervention" },
 ];
 
 const formatExamWeight = (exam?: number) => {
@@ -247,7 +228,7 @@ const ReportBody = ({ report }: { report: ReportCard }) => {
                   <th className="px-3 py-2">Total</th>
                   <th className="px-3 py-2">Grade</th>
                   <th className="px-3 py-2">Remarks</th>
-                </tr>
+                 </tr>
               </thead>
               <tbody>
                 {report.subjects.map((row) => (
@@ -302,29 +283,30 @@ const ReportBody = ({ report }: { report: ReportCard }) => {
           <p className="text-[11px] font-semibold uppercase report-section-title">
             Summary & Conduct
           </p>
-          <div className="mt-3 grid grid-cols-2 gap-3 text-slate-700">
-            <p>
-              <span className="report-label">Overall Score:</span>{" "}
-              {report.overallScore}%
-            </p>
-            <p>
-              <span className="report-label">Overall Grade:</span>{" "}
-              {report.overallGrade}
-            </p>
-            <p>
-              <span className="report-label">Behavior:</span> {report.behavior}
-            </p>
-            <p>
-              <span className="report-label">Discipline:</span>{" "}
-              {report.discipline}
-            </p>
-            <p>
-              <span className="report-label">Class Position:</span>
-            </p>
-            <p>
-              <span className="report-label">Reopening Date:</span>{" "}
-              {report.reopeningDate || "-"}
-            </p>
+          <div className="mt-3 space-y-3 text-slate-700">
+            <div className="grid grid-cols-2 gap-3">
+              <p>
+                <span className="report-label">Overall Score:</span>{" "}
+                {report.overallScore}%
+              </p>
+              <p>
+                <span className="report-label">Overall Grade:</span>{" "}
+                {report.overallGrade}
+              </p>
+              <p>
+                <span className="report-label">Class Position:</span> —
+              </p>
+              <p>
+                <span className="report-label">Reopening Date:</span>{" "}
+                {report.reopeningDate || "-"}
+              </p>
+            </div>
+            <div>
+              <p>
+                <span className="report-label">Conduct and Attitude:</span>{" "}
+                {report.conductAttitude}
+              </p>
+            </div>
           </div>
           <p className="mt-3 text-slate-600">{report.summary}</p>
         </div>
@@ -390,6 +372,11 @@ export default function ReportsPage() {
   const [studentPageSize, setStudentPageSize] = React.useState(10);
   const [reportPage, setReportPage] = React.useState(1);
   const [reportPageSize, setReportPageSize] = React.useState(5);
+  const [editingConductAttitude, setEditingConductAttitude] = React.useState<{
+    cardId: string;
+    value: string;
+  } | null>(null);
+  const [conductAttitudeMap, setConductAttitudeMap] = React.useState<Record<string, string>>({});
   const pathname = usePathname();
 
   const load = async () => {
@@ -399,7 +386,7 @@ export default function ReportsPage() {
         apiRequest<AssessmentStoredRecord[]>(API_ENDPOINTS.assessments),
         apiRequest<Array<{ id: string; printedAt?: string | null }>>(
           API_ENDPOINTS.reports,
-        ).catch(() => []), // Handle reports API failure gracefully
+        ).catch(() => []),
         apiRequest<AttendanceRecord[]>(API_ENDPOINTS.attendance).catch(() => null),
         apiRequest<VacationDateRecord[]>(API_ENDPOINTS.vacationDates).catch(() => null),
         apiRequest<ReopeningDateRecord[]>(API_ENDPOINTS.reopeningDates).catch(() => null),
@@ -528,7 +515,6 @@ export default function ReportsPage() {
   const reportCards = React.useMemo(() => {
     if (filteredRecords.length === 0) return [] as ReportCard[];
 
-    // Build subjectMap - key must include section to match classLabel
     const subjectMap = new Map<string, Set<string>>();
     filteredRecords.forEach((record) => {
       const classLabel = `${record.className ?? "Class"}${record.section ?? ""}`.trim();
@@ -581,6 +567,11 @@ export default function ReportsPage() {
         }
         const entry = studentMap.get(studentKey);
         if (!entry) return;
+        
+        // Calculate total: Class Exercise + Homework/Project + Exam
+        // Note: Exam is already weighted at 60% in the stored data
+        const calculatedTotal = row.classExercise + row.homeworkProject + row.exam;
+        
         const existing = entry.subjectScores.get(record.subject);
         const recordTime = record.savedAt
           ? new Date(record.savedAt).getTime()
@@ -590,7 +581,7 @@ export default function ReportsPage() {
           : 0;
         if (!existing || recordTime >= existingTime) {
           entry.subjectScores.set(record.subject, {
-            total: row.total,
+            total: calculatedTotal,
             classExercise: row.classExercise,
             homeworkProject: row.homeworkProject,
             exam: row.exam,
@@ -635,6 +626,7 @@ export default function ReportsPage() {
         },
       );
 
+      // Calculate overall score as average of all subject totals
       const scores = subjectRows
         .filter((row) => typeof row.score === "number")
         .map((row) => row.score as number);
@@ -664,12 +656,8 @@ export default function ReportsPage() {
         data.academicYear,
       );
       const status = reportStatus[reportKey];
+      const storedConductAttitude = conductAttitudeMap[reportKey] || conductAttitudeOptions[0];
 
-      // Behavior and discipline are independent from academic scores
-      // They will be set by teachers separately (defaulting to "Very Good" / "Excellent")
-      const behaviorRating = 85; // Default - should be set by teacher in separate UI
-      const disciplineRating = 88; // Default - should be set by teacher in separate UI
-      
       return {
         id: reportKey,
         studentId: data.studentId,
@@ -685,13 +673,41 @@ export default function ReportsPage() {
         overallGrade,
         attendance,
         summary: scoreToSummary(overallScore),
-        behavior: scoreToBehavior(behaviorRating),
-        discipline: scoreToDiscipline(disciplineRating),
+        conductAttitude: storedConductAttitude,
         ready,
         printedAt: status?.printedAt,
       };
     });
-  }, [filteredRecords, reportStatus, attendanceLookup, vacationDateLookup, reopeningDateLookup]);
+  }, [filteredRecords, reportStatus, attendanceLookup, vacationDateLookup, reopeningDateLookup, conductAttitudeMap]);
+
+  const updateConductAttitude = (cardId: string, value: string) => {
+    setConductAttitudeMap(prev => ({
+      ...prev,
+      [cardId]: value
+    }));
+    try {
+      localStorage.setItem(`conduct_attitude_${cardId}`, value);
+    } catch (e) {
+      // Silently fail
+    }
+  };
+
+  React.useEffect(() => {
+    try {
+      const savedMap: Record<string, string> = {};
+      reportCards.forEach(card => {
+        const saved = localStorage.getItem(`conduct_attitude_${card.id}`);
+        if (saved && conductAttitudeOptions.includes(saved)) {
+          savedMap[card.id] = saved;
+        }
+      });
+      if (Object.keys(savedMap).length > 0) {
+        setConductAttitudeMap(savedMap);
+      }
+    } catch (e) {
+      // Silently fail
+    }
+  }, [reportCards]);
 
   const filteredStudents = React.useMemo(() => {
     const query = studentSearch.trim().toLowerCase();
@@ -770,7 +786,6 @@ export default function ReportsPage() {
       return;
     }
 
-    // Try to generate report on server, but don't fail if API is unavailable
     try {
       await apiRequest(`${API_ENDPOINTS.reports}/generate`, {
         method: "POST",
@@ -789,7 +804,6 @@ export default function ReportsPage() {
         }),
       });
     } catch (err) {
-      // Silently handle API errors - report is already generated locally
       console.warn("Report generation API unavailable, using local data:", err);
     }
   };
@@ -802,14 +816,12 @@ export default function ReportsPage() {
     };
     setReportStatus(updated);
     
-    // Try to update print status on server, but don't fail if API is unavailable
     try {
       await apiRequest(`${API_ENDPOINTS.reports}/${card.id}/print`, {
         method: "PATCH",
         body: JSON.stringify({ printed: true }),
       });
     } catch (err) {
-      // Silently handle API errors - local state is already updated
       console.warn("Print status update API unavailable, using local state:", err);
     }
   };
@@ -1064,7 +1076,6 @@ export default function ReportsPage() {
     }
   };
 
-
   return (
     <DashboardLayout loading={isLoading}>
       <style jsx global>{`
@@ -1168,13 +1179,10 @@ export default function ReportsPage() {
             background: white !important;
           }
 
-          /* Keep colors and layout; printing uses report content only */
-
           .print-modal {
             display: block !important;
           }
 
-          /* Hide non-print elements */
           .print-overlay,
           .print-actions {
             display: none !important;
@@ -1185,7 +1193,6 @@ export default function ReportsPage() {
             overflow: visible !important;
           }
 
-          /* Hide non-print elements */
           .report-watermark,
           .print-watermark {
             position: absolute !important;
@@ -1280,7 +1287,6 @@ export default function ReportsPage() {
               <RefreshCw size={13} className="mr-1" /> Refresh
             </Button>
             <Button variant="outline" className="h-9 px-3 text-xs" onClick={() => {
-              // Simple CSV export for selected reports
               if (selectedReportIds.length === 0) {
                 error("Select students to export.");
                 return;
@@ -1290,7 +1296,6 @@ export default function ReportsPage() {
                 error("No reports selected for export.");
                 return;
               }
-              // Build CSV content
               const headers = ["Student Name", "Class", "Term", "Academic Year", "Subject", "Score", "Grade", "Remark"];
               const rows: string[][] = [];
               cardsToExport.forEach(card => {
@@ -1335,7 +1340,6 @@ export default function ReportsPage() {
                 error("Select students to print.");
                 return;
               }
-              // Find the first selected card and open print modal for it
               const firstSelectedCard = reportCards.find(c => selectedReportIds.includes(c.id));
               if (firstSelectedCard) {
                 setActiveReport(firstSelectedCard);
@@ -1534,7 +1538,7 @@ export default function ReportsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {card.subjects.map((row) => (
+                      {card.subjects.slice(0, 3).map((row) => (
                         <tr
                           key={row.subject}
                           className="border-t border-slate-100 text-slate-700"
@@ -1544,15 +1548,63 @@ export default function ReportsPage() {
                           <td className="px-3 py-2">{row.remark}</td>
                         </tr>
                       ))}
+                      {card.subjects.length > 3 && (
+                        <tr className="border-t border-slate-100">
+                          <td colSpan={3} className="px-3 py-2 text-center text-slate-400">
+                            +{card.subjects.length - 3} more subjects
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
 
+                <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <p className="text-slate-500">
+                      Attendance: {card.attendance.present}/
+                      {card.attendance.total} ({card.attendance.percent}%)
+                    </p>
+                    <p className="text-slate-500 mt-1">
+                      Overall Grade: {card.overallGrade}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-slate-500 block text-[10px] mb-1">
+                      Conduct and Attitude:
+                    </label>
+                    {editingConductAttitude?.cardId === card.id ? (
+                      <select
+                        value={editingConductAttitude.value}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          updateConductAttitude(card.id, newValue);
+                          setEditingConductAttitude(null);
+                        }}
+                        onBlur={() => setEditingConductAttitude(null)}
+                        className="text-xs border rounded px-2 py-1 w-full"
+                        autoFocus
+                      >
+                        {conductAttitudeOptions.map(option => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <p 
+                        className="text-slate-700 cursor-pointer hover:bg-slate-50 p-1 rounded"
+                        onClick={() => setEditingConductAttitude({ 
+                          cardId: card.id, 
+                          value: conductAttitudeMap[card.id] || conductAttitudeOptions[0]
+                        })}
+                      >
+                        {conductAttitudeMap[card.id] || conductAttitudeOptions[0]}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
                 <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-                  <p>
-                    Attendance: {card.attendance.present}/
-                    {card.attendance.total} ({card.attendance.percent}%)
-                  </p>
+                  <p className="text-[10px] text-slate-400">{card.summary.substring(0, 60)}...</p>
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
@@ -1643,176 +1695,13 @@ export default function ReportsPage() {
                       priority
                     />
                   </div>
-                  <div className="flex items-center justify-between px-6 py-4 print-header report-header-bar">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 overflow-hidden rounded-full border border-white/40 bg-white/90">
-                        <Image
-                          src="/KAASLOGO.jpeg"
-                          alt="Kaas logo"
-                          width={40}
-                          height={40}
-                        />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-bold">
-                          Kaas Montessori School
-                        </h3>
-                        <p className="text-xs text-white/80">
-                          Terminal Report
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right text-[11px] text-white/80">
-                      <p className="font-semibold text-white">
-                        Academic Year: {activeReport.academicYear}
-                      </p>
-                      <p>Term: {formatTerm(activeReport.term)}</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-5 p-6 print-area">
-                    <div className="rounded-lg border border-slate-200 p-4 text-xs">
-                      <p className="text-[11px] font-semibold uppercase report-section-title">
-                        Student Details
-                      </p>
-                      <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-slate-700">
-                        <p>
-                          <span className="report-label">Student Name:</span>{" "}
-                          {activeReport.studentName}
-                        </p>
-                        <p>
-                          <span className="report-label">Class:</span>{" "}
-                          {activeReport.classLabel}
-                        </p>
-                        <p>
-                          <span className="report-label">Vacation Date:</span>{" "}
-                          {activeReport.vacationDate || "-"}
-                        </p>
-                        <p>
-                          <span className="report-label">Attendance:</span>{" "}
-                          {activeReport.attendance.present}/
-                          {activeReport.attendance.total} (
-                          {activeReport.attendance.percent}%)
-                        </p>
-                      </div>
-                    </div>
-
-                    <div>
-                      <p className="text-xs font-semibold uppercase report-section-title">
-                        Academic Performance
-                      </p>
-                      <div className="mt-2 overflow-hidden rounded-lg border border-slate-200">
-                        <table className="w-full text-left text-xs print-table report-table">
-                          <thead>
-                            <tr>
-                              <th className="px-3 py-2">Subject</th>
-                              <th className="px-3 py-2">Class Exercise</th>
-                              <th className="px-3 py-2">Homework + Project</th>
-                              <th className="px-3 py-2">Exam (60%)</th>
-                              <th className="px-3 py-2">Total</th>
-                              <th className="px-3 py-2">Grade</th>
-                              <th className="px-3 py-2">Remarks</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {activeReport.subjects.map((row) => (
-                              <tr
-                                key={row.subject}
-                                className="border-t border-slate-100 text-slate-700"
-                              >
-                                <td className="px-3 py-2 subject">{row.subject}</td>
-                                <td className="px-3 py-2">{row.classExercise ?? "-"}</td>
-                                <td className="px-3 py-2">{row.homeworkProject ?? "-"}</td>
-                                <td className="px-3 py-2">{formatExamWeight(row.exam)}</td>
-                                <td className="px-3 py-2">{row.score ?? "-"}</td>
-                                <td className="px-3 py-2">{row.grade}</td>
-                                <td className="px-3 py-2">{row.remark}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-
-                    <div className="rounded-lg border border-slate-200 p-4 text-xs">
-                      <p className="text-[11px] font-semibold uppercase report-section-title">
-                        Interpretation Of Score & Grade Mapping
-                      </p>
-                      <div className="mt-3 overflow-hidden rounded-lg border border-slate-200">
-                        <table className="w-full text-left text-xs print-table report-table">
-                          <thead>
-                            <tr>
-                              <th className="px-3 py-2">Score Range</th>
-                              <th className="px-3 py-2">Grade</th>
-                              <th className="px-3 py-2">Remark</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {gradeInterpretation.map((row) => (
-                              <tr
-                                key={row.grade}
-                                className="border-t border-slate-100 text-slate-700"
-                              >
-                                <td className="px-3 py-2">{row.range}</td>
-                                <td className="px-3 py-2">{row.grade}</td>
-                                <td className="px-3 py-2">{row.remark}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-
-                    <div className="rounded-lg border border-slate-200 p-4 text-xs">
-                      <p className="text-[11px] font-semibold uppercase report-section-title">
-                        Summary & Conduct
-                      </p>
-                      <div className="mt-3 grid grid-cols-2 gap-3 text-slate-700">
-                        <p>
-                          <span className="report-label">Overall Score:</span>{" "}
-                          {activeReport.overallScore}%
-                        </p>
-                        <p>
-                          <span className="report-label">Overall Grade:</span>{" "}
-                          {activeReport.overallGrade}
-                        </p>
-                        <p>
-                          <span className="report-label">Behavior:</span>{" "}
-                          {activeReport.behavior}
-                        </p>
-                        <p>
-                          <span className="report-label">Discipline:</span>{" "}
-                          {activeReport.discipline}
-                        </p>
-                        <p>
-                          <span className="report-label">Class Position:</span>
-                        </p>
-                        <p>
-                          <span className="report-label">Reopening Date:</span>
-                          {" "}
-                          {activeReport.reopeningDate || "-"}
-                        </p>
-                      </div>
-                      <p className="mt-3 text-slate-600">{activeReport.summary}</p>
-                    </div>
-
-                    <div className="pt-20 text-xs text-slate-600">
-                      <div className="mx-auto max-w-[240px]">
-                        <div className="h-px w-full bg-slate-300" />
-                        <p className="mt-2 text-center">
-                          Headmaster&apos;s Signature
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
+                  <ReportBody report={activeReport} />
                 </div>
               </div>
             </div>
           </div>
         </div>
       )}
-
     </DashboardLayout>
   );
 }
